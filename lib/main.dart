@@ -6,7 +6,7 @@ import 'package:proposal_writer/presentation/screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
+  await dotenv.load(fileName: '.env', isOptional: true);
 
   runApp(const ProviderScope(child: ProposalWriterApp()));
 }
