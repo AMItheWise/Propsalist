@@ -1,4 +1,4 @@
-package com.example.propsalist
+package com.proposalwriter.app
 
 import io.flutter.embedding.android.FlutterActivity
 
