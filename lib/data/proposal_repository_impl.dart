@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
+import 'package:proposal_writer/core/constants.dart';
 import 'package:proposal_writer/core/env.dart';
 import 'package:proposal_writer/core/failures.dart';
 import 'package:proposal_writer/core/result.dart';
 import 'package:proposal_writer/data/dto/openai_models.dart';
 import 'package:proposal_writer/data/openai_client.dart';
+import 'package:proposal_writer/domain/entities/clarification_response.dart';
 import 'package:proposal_writer/domain/entities/proposal.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 import 'package:proposal_writer/domain/repositories/proposal_repository.dart';
@@ -20,18 +24,100 @@ class ProposalRepositoryImpl implements ProposalRepository {
   final EnvConfig _config;
 
   @override
-  Future<Result<Proposal>> generateProposal({
+  Future<Result<ClarificationResponse>> requestClarifications({
     required String prompt,
-    required ProposalTone tone,
-    required int maxTokens,
   }) async {
     try {
       final request = OpenAIChatRequest(
         model: _config.model,
+        maxTokens: 256,
+        messages: [
+          const OpenAIChatMessage(role: 'system', content: clarificationPrompt),
+          OpenAIChatMessage(role: 'user', content: prompt),
+        ],
+      );
+
+      final response = await _client.createChatCompletion(request);
+      if (response.choices.isEmpty) {
+        return const FailureResult(
+          ParsingFailure('No choices returned from the API.'),
+        );
+      }
+
+      final content = _stripJsonCodeFence(
+        response.choices.first.message.content.trim(),
+      );
+      final payload = jsonDecode(content);
+      if (payload is! Map<String, dynamic>) {
+        return const FailureResult(
+          ParsingFailure('Clarification response was not a JSON object.'),
+        );
+      }
+
+      final needsClarification =
+          payload['needs_clarification'] == true ||
+          payload['needsClarification'] == true;
+      final questions = (payload['questions'] as List<dynamic>? ?? [])
+          .whereType<String>()
+          .toList();
+      final summary = (payload['summary'] as String?)?.trim() ?? '';
+      if (summary.isEmpty) {
+        return const FailureResult(
+          ParsingFailure('Clarification summary was empty.'),
+        );
+      }
+
+      return Success(
+        ClarificationResponse(
+          needsClarification: needsClarification,
+          questions: questions,
+          summary: summary,
+        ),
+      );
+    } on DioException catch (error) {
+      return FailureResult(
+        NetworkFailure('Failed to reach the OpenAI API.', cause: error),
+      );
+    } on FormatException catch (error) {
+      return FailureResult(
+        ParsingFailure('Failed to parse OpenAI response.', cause: error),
+      );
+    } catch (error) {
+      return FailureResult(
+        UnknownFailure(
+          'Unexpected error generating clarification.',
+          cause: error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<Proposal>> generateProposal({
+    required String prompt,
+    required ProposalTone tone,
+    required int maxTokens,
+    required String summary,
+    String? clarificationAnswers,
+  }) async {
+    try {
+      final userContext = StringBuffer()
+        ..writeln('User request: $prompt')
+        ..writeln('Intake summary: $summary');
+      if (clarificationAnswers != null &&
+          clarificationAnswers.trim().isNotEmpty) {
+        userContext.writeln('Clarification answers: $clarificationAnswers');
+      }
+
+      final request = OpenAIChatRequest(
+        model: _config.model,
         maxTokens: maxTokens,
         messages: [
-          OpenAIChatMessage(role: 'system', content: tone.systemPrompt),
-          OpenAIChatMessage(role: 'user', content: prompt),
+          OpenAIChatMessage(
+            role: 'system',
+            content: '${tone.systemPrompt}\n\n$finalProposalPrompt',
+          ),
+          OpenAIChatMessage(role: 'user', content: userContext.toString()),
         ],
       );
 
@@ -63,5 +149,16 @@ class ProposalRepositoryImpl implements ProposalRepository {
         UnknownFailure('Unexpected error generating proposal.', cause: error),
       );
     }
+  }
+
+  String _stripJsonCodeFence(String content) {
+    var trimmed = content.trim();
+    if (trimmed.startsWith('```')) {
+      trimmed = trimmed.replaceFirst(RegExp(r'^```(?:json)?'), '');
+      if (trimmed.endsWith('```')) {
+        trimmed = trimmed.substring(0, trimmed.length - 3);
+      }
+    }
+    return trimmed.trim();
   }
 }

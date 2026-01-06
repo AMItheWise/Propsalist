@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:proposal_writer/core/constants.dart';
@@ -14,16 +15,19 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final TextEditingController _promptController;
+  late final TextEditingController _clarificationController;
 
   @override
   void initState() {
     super.initState();
     _promptController = TextEditingController();
+    _clarificationController = TextEditingController();
   }
 
   @override
   void dispose() {
     _promptController.dispose();
+    _clarificationController.dispose();
     super.dispose();
   }
 
@@ -32,7 +36,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final prompt = ref.watch(promptProvider);
     final tone = ref.watch(toneProvider);
     final maxTokens = ref.watch(maxTokensProvider);
-    final proposalState = ref.watch(proposalGeneratorProvider);
+    final proposalState = ref.watch(proposalFlowProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Proposal Writer')),
@@ -99,33 +103,118 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onPressed:
                           prompt.trim().isEmpty || proposalState.isLoading
                           ? null
-                          : () => ref
-                                .read(proposalGeneratorProvider.notifier)
-                                .generate(
-                                  prompt: prompt.trim(),
-                                  tone: tone,
-                                  maxTokens: maxTokens,
-                                ),
+                          : () {
+                              _clarificationController.clear();
+                              ref
+                                  .read(proposalFlowProvider.notifier)
+                                  .start(
+                                    prompt: prompt.trim(),
+                                    tone: tone,
+                                    maxTokens: maxTokens,
+                                  );
+                            },
                       child: const Text('Generate'),
                     ),
                     const SizedBox(height: 24),
                     if (proposalState.isLoading)
                       const Center(child: CircularProgressIndicator())
-                    else if (proposalState.hasError)
+                    else if (proposalState.errorMessage != null)
                       Text(
-                        proposalState.error.toString(),
+                        proposalState.errorMessage ?? '',
                         key: const Key('errorText'),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
                       )
-                    else if (proposalState.value?.isNotEmpty ?? false)
+                    else if (proposalState.awaitingClarifications)
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: SelectableText(
-                            proposalState.value ?? '',
-                            key: const Key('proposalOutput'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Please clarify:',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 12),
+                              for (final question in proposalState.questions)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text('• $question'),
+                                ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                key: const Key('clarificationField'),
+                                controller: _clarificationController,
+                                maxLines: 4,
+                                onChanged: (_) => setState(() {}),
+                                decoration: const InputDecoration(
+                                  labelText: 'Your answers',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                key: const Key('submitClarificationsButton'),
+                                onPressed:
+                                    _clarificationController.text.trim().isEmpty
+                                    ? null
+                                    : () => ref
+                                          .read(proposalFlowProvider.notifier)
+                                          .submitClarifications(
+                                            _clarificationController.text
+                                                .trim(),
+                                          ),
+                                child: const Text('Continue'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (proposalState.proposal?.isNotEmpty ?? false)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Proposal',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.content_copy),
+                                    tooltip: 'Copy proposal',
+                                    onPressed: () {
+                                      final proposal =
+                                          proposalState.proposal ?? '';
+                                      Clipboard.setData(
+                                        ClipboardData(text: proposal),
+                                      );
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Proposal copied.'),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SelectableText(
+                                proposalState.proposal ?? '',
+                                key: const Key('proposalOutput'),
+                              ),
+                            ],
                           ),
                         ),
                       )
