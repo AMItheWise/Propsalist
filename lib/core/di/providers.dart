@@ -7,7 +7,7 @@ import 'package:proposal_writer/data/openai_client.dart';
 import 'package:proposal_writer/data/openai_mock_client.dart';
 import 'package:proposal_writer/data/proposal_repository_impl.dart';
 import 'package:proposal_writer/domain/repositories/proposal_repository.dart';
-import 'package:proposal_writer/domain/usecases/generate_proposal_usecase.dart';
+import 'package:proposal_writer/domain/usecases/proposal_flow_usecase.dart';
 
 final envConfigProvider = Provider<EnvConfig>((ref) {
   return EnvConfig.fromEnvironment(dotenv: dotenv.env);
@@ -41,10 +41,6 @@ final proposalRepositoryProvider = Provider<ProposalRepository>((ref) {
   );
 });
 
-final generateProposalUseCaseProvider = Provider<GenerateProposalUseCase>((
-  ref,
-) {
-  return GenerateProposalUseCase(
-    repository: ref.watch(proposalRepositoryProvider),
-  );
+final proposalFlowUseCaseProvider = Provider<ProposalFlowUseCase>((ref) {
+  return ProposalFlowUseCase(repository: ref.watch(proposalRepositoryProvider));
 });
