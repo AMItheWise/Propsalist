@@ -61,9 +61,16 @@ class ProposalRepositoryImpl implements ProposalRepository {
           .whereType<String>()
           .toList();
       final summary = (payload['summary'] as String?)?.trim() ?? '';
+      final improvedPrompt =
+          (payload['improved_prompt'] as String?)?.trim() ?? '';
       if (summary.isEmpty) {
         return const FailureResult(
           ParsingFailure('Clarification summary was empty.'),
+        );
+      }
+      if (!needsClarification && improvedPrompt.isEmpty) {
+        return const FailureResult(
+          ParsingFailure('Clarification improved prompt was empty.'),
         );
       }
 
@@ -72,6 +79,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
           needsClarification: needsClarification,
           questions: questions,
           summary: summary,
+          improvedPrompt: improvedPrompt,
         ),
       );
     } on DioException catch (error) {

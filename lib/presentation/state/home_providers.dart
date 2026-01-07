@@ -50,6 +50,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
         await _generateProposal(
           request: request,
           summary: clarification.summary,
+          promptOverride: clarification.improvedPrompt,
         );
       },
       failure: (failure) async {
@@ -69,10 +70,39 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       return;
     }
     state = state.copyWith(isLoading: true, errorMessage: null);
-    await _generateProposal(
-      request: request,
-      summary: summary,
-      clarificationAnswers: answers,
+    final clarifiedPrompt = StringBuffer()
+      ..writeln('User request: ${request.prompt}')
+      ..writeln('Clarification answers: $answers');
+    final useCase = _ref.read(proposalFlowUseCaseProvider);
+    final result = await useCase.requestClarifications(
+      prompt: clarifiedPrompt.toString(),
+    );
+    await result.when(
+      success: (clarification) async {
+        if (clarification.hasQuestions) {
+          state = state.copyWith(
+            isLoading: false,
+            awaitingClarifications: true,
+            questions: clarification.questions,
+            summary: clarification.summary,
+            errorMessage: null,
+          );
+          return;
+        }
+        await _generateProposal(
+          request: request,
+          summary: clarification.summary,
+          clarificationAnswers: answers,
+          promptOverride: clarification.improvedPrompt,
+        );
+      },
+      failure: (failure) async {
+        state = state.copyWith(
+          isLoading: false,
+          awaitingClarifications: false,
+          errorMessage: failure.message,
+        );
+      },
     );
   }
 
@@ -80,10 +110,11 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
     required ProposalRequest request,
     required String summary,
     String? clarificationAnswers,
+    String? promptOverride,
   }) async {
     final useCase = _ref.read(proposalFlowUseCaseProvider);
     final result = await useCase.generateProposal(
-      prompt: request.prompt,
+      prompt: promptOverride ?? request.prompt,
       tone: request.tone,
       maxTokens: request.maxTokens,
       summary: summary,
