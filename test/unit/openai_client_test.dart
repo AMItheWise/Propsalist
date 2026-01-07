@@ -129,4 +129,35 @@ void main() {
       'max_output_tokens': 120,
     });
   });
+
+  test('DioOpenAIClient handles output_text list of objects', () async {
+    const responseBody = {
+      'output_text': [
+        {'type': 'output_text', 'text': 'ok'},
+      ],
+    };
+    final adapter = RecordingAdapter(jsonEncode(responseBody));
+    final config = EnvConfig(
+      apiKey: 'test-key',
+      model: 'gpt-5-mini',
+      baseUrl: Uri.parse('https://api.openai.com'),
+      mockApi: false,
+    );
+    final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
+      ..httpClientAdapter = adapter;
+    final client = DioOpenAIClient(dio: dio, config: config);
+
+    const request = OpenAIChatRequest(
+      model: 'gpt-5-mini',
+      maxTokens: 120,
+      messages: [
+        OpenAIChatMessage(role: 'system', content: 'system'),
+        OpenAIChatMessage(role: 'user', content: 'prompt'),
+      ],
+    );
+
+    final response = await client.createChatCompletion(request);
+
+    expect(response.choices.first.message.content, 'ok');
+  });
 }

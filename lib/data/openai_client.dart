@@ -117,9 +117,19 @@ class DioOpenAIClient implements OpenAIClient {
       return outputText;
     }
     if (outputText is List && outputText.isNotEmpty) {
-      final first = outputText.first;
-      if (first is String) {
-        return first;
+      final buffer = StringBuffer();
+      for (final part in outputText) {
+        if (part is String) {
+          buffer.write(part);
+          continue;
+        }
+        if (part is Map<String, dynamic> && part['text'] is String) {
+          buffer.write(part['text'] as String);
+        }
+      }
+      final text = buffer.toString();
+      if (text.isNotEmpty) {
+        return text;
       }
     }
 
