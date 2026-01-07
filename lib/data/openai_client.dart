@@ -100,6 +100,9 @@ class DioOpenAIClient implements OpenAIClient {
 
   String? _extractResponsesText(Map<String, dynamic> data) {
     final outputText = data['output_text'];
+    if (outputText is String && outputText.isNotEmpty) {
+      return outputText;
+    }
     if (outputText is List && outputText.isNotEmpty) {
       final first = outputText.first;
       if (first is String) {
