@@ -44,13 +44,11 @@ class ProposalRepositoryImpl implements ProposalRepository {
         );
       }
 
-      final content = _stripJsonCodeFence(
-        response.choices.first.message.content.trim(),
-      );
-      final payload = jsonDecode(content);
-      if (payload is! Map<String, dynamic>) {
+      final content = response.choices.first.message.content.trim();
+      final payload = _parseClarificationPayload(content);
+      if (payload == null) {
         return const FailureResult(
-          ParsingFailure('Clarification response was not a JSON object.'),
+          ParsingFailure('Clarification response was not valid JSON.'),
         );
       }
 
@@ -168,5 +166,34 @@ class ProposalRepositoryImpl implements ProposalRepository {
       }
     }
     return trimmed.trim();
+  }
+
+  Map<String, dynamic>? _parseClarificationPayload(String content) {
+    final trimmed = _stripJsonCodeFence(content);
+    final directPayload = _decodeJsonObject(trimmed);
+    if (directPayload != null) {
+      return directPayload;
+    }
+
+    final start = trimmed.indexOf('{');
+    final end = trimmed.lastIndexOf('}');
+    if (start == -1 || end == -1 || end <= start) {
+      return null;
+    }
+
+    final candidate = trimmed.substring(start, end + 1);
+    return _decodeJsonObject(candidate);
+  }
+
+  Map<String, dynamic>? _decodeJsonObject(String content) {
+    try {
+      final payload = jsonDecode(content);
+      if (payload is Map<String, dynamic>) {
+        return payload;
+      }
+      return null;
+    } on FormatException {
+      return null;
+    }
   }
 }
