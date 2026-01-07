@@ -30,7 +30,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
     try {
       final request = OpenAIChatRequest(
         model: _config.model,
-        maxTokens: 256,
+        maxTokens: maxTokensLimit,
         messages: [
           const OpenAIChatMessage(role: 'system', content: clarificationPrompt),
           OpenAIChatMessage(role: 'user', content: prompt),
