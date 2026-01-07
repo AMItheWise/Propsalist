@@ -82,7 +82,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
       );
     } on DioException catch (error) {
       return FailureResult(
-        NetworkFailure('Failed to reach the OpenAI API.', cause: error),
+        NetworkFailure(_describeDioError(error), cause: error),
       );
     } on FormatException catch (error) {
       return FailureResult(
@@ -144,7 +144,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
       return Success(Proposal(content: content));
     } on DioException catch (error) {
       return FailureResult(
-        NetworkFailure('Failed to reach the OpenAI API.', cause: error),
+        NetworkFailure(_describeDioError(error), cause: error),
       );
     } on FormatException catch (error) {
       return FailureResult(
@@ -195,5 +195,18 @@ class ProposalRepositoryImpl implements ProposalRepository {
     } on FormatException {
       return null;
     }
+  }
+
+  String _describeDioError(DioException error) {
+    final response = error.response;
+    if (response == null) {
+      return 'Failed to reach the OpenAI API.';
+    }
+
+    final status = response.statusCode;
+    final data = response.data;
+    final body = data == null ? 'No response body.' : data.toString();
+    final statusLabel = status == null ? '' : ' ($status)';
+    return 'OpenAI API error$statusLabel: $body';
   }
 }
