@@ -160,4 +160,42 @@ void main() {
 
     expect(response.choices.first.message.content, 'ok');
   });
+
+  test('DioOpenAIClient surfaces incomplete responses', () async {
+    const responseBody = {
+      'status': 'incomplete',
+      'incomplete_details': {'reason': 'max_output_tokens'},
+      'output': [],
+    };
+    final adapter = RecordingAdapter(jsonEncode(responseBody));
+    final config = EnvConfig(
+      apiKey: 'test-key',
+      model: 'gpt-5-mini',
+      baseUrl: Uri.parse('https://api.openai.com'),
+      mockApi: false,
+    );
+    final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
+      ..httpClientAdapter = adapter;
+    final client = DioOpenAIClient(dio: dio, config: config);
+
+    const request = OpenAIChatRequest(
+      model: 'gpt-5-mini',
+      maxTokens: 120,
+      messages: [
+        OpenAIChatMessage(role: 'system', content: 'system'),
+        OpenAIChatMessage(role: 'user', content: 'prompt'),
+      ],
+    );
+
+    expect(
+      () => client.createChatCompletion(request),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'Response incomplete: max_output_tokens.',
+        ),
+      ),
+    );
+  });
 }

@@ -77,6 +77,7 @@ class DioOpenAIClient implements OpenAIClient {
       throw const FormatException('Empty response body.');
     }
 
+    _throwIfIncomplete(data);
     final content = _extractResponsesText(data);
     if (content == null || content.trim().isEmpty) {
       throw const FormatException('Empty response content.');
@@ -159,6 +160,21 @@ class DioOpenAIClient implements OpenAIClient {
 
     final text = buffer.toString();
     return text.isEmpty ? null : text;
+  }
+
+  void _throwIfIncomplete(Map<String, dynamic> data) {
+    final status = data['status'];
+    if (status != 'incomplete') {
+      return;
+    }
+    final details = data['incomplete_details'];
+    if (details is Map<String, dynamic>) {
+      final reason = details['reason'];
+      if (reason is String && reason.isNotEmpty) {
+        throw FormatException('Response incomplete: $reason.');
+      }
+    }
+    throw const FormatException('Response incomplete.');
   }
 
   void _debugLog(String label, Object? payload) {
