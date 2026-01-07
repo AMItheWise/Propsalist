@@ -28,14 +28,14 @@ Secrets are never committed. Use `--dart-define` in CI/production and optionally
 ```bash
 flutter run \
   --dart-define=OPENAI_API_KEY=your_key \
-  --dart-define=OPENAI_MODEL=gpt-4o-mini
+  --dart-define=OPENAI_MODEL=gpt-5-mini
 ```
 
 ### Optional local `.env`
 Create a `.env` file (ignored by git):
 ```ini
 OPENAI_API_KEY=your_key
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-mini
 OPENAI_BASE_URL=https://api.openai.com
 MOCK_API=true
 ```
