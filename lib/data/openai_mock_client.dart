@@ -26,6 +26,7 @@ class MockOpenAIClient implements OpenAIClient {
             'needs_clarification': false,
             'questions': <String>[],
             'summary': 'Mocked summary of the request.',
+            'improved_prompt': 'Mocked improved prompt.',
           })
         : '[MOCK] $model: $prompt';
 
