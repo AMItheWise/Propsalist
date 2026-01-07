@@ -18,8 +18,8 @@ final dioProvider = Provider<Dio>((ref) {
   return Dio(
     BaseOptions(
       baseUrl: config.baseUrl.toString(),
-      connectTimeout: const Duration(seconds: 20),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 120),
     ),
   );
 });

@@ -7,8 +7,11 @@ import 'package:proposal_writer/data/dto/openai_models.dart';
 import 'package:proposal_writer/data/openai_client.dart';
 
 class RecordingAdapter implements HttpClientAdapter {
+  RecordingAdapter(this.responseBody);
+
   RequestOptions? lastRequest;
   Object? lastData;
+  final String responseBody;
 
   @override
   Future<ResponseBody> fetch(
@@ -19,16 +22,8 @@ class RecordingAdapter implements HttpClientAdapter {
     lastRequest = options;
     lastData = options.data;
 
-    const response = OpenAIChatResponse(
-      choices: [
-        OpenAIChatChoice(
-          message: OpenAIChatMessage(role: 'assistant', content: 'ok'),
-        ),
-      ],
-    );
-
     return ResponseBody.fromString(
-      jsonEncode(response.toJson()),
+      responseBody,
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -44,7 +39,14 @@ void main() {
   test(
     'DioOpenAIClient builds request with headers, endpoint, and body',
     () async {
-      final adapter = RecordingAdapter();
+      const response = OpenAIChatResponse(
+        choices: [
+          OpenAIChatChoice(
+            message: OpenAIChatMessage(role: 'assistant', content: 'ok'),
+          ),
+        ],
+      );
+      final adapter = RecordingAdapter(jsonEncode(response.toJson()));
       final config = EnvConfig(
         apiKey: 'test-key',
         model: 'gpt-test',
@@ -72,4 +74,128 @@ void main() {
       expect(adapter.lastData, request.toJson());
     },
   );
+
+  test('DioOpenAIClient uses the responses API for gpt-5 models', () async {
+    const responseBody = {
+      'output': [
+        {
+          'type': 'message',
+          'role': 'assistant',
+          'content': [
+            {'type': 'output_text', 'text': 'ok'},
+          ],
+        },
+      ],
+    };
+    final adapter = RecordingAdapter(jsonEncode(responseBody));
+    final config = EnvConfig(
+      apiKey: 'test-key',
+      model: 'gpt-5-mini',
+      baseUrl: Uri.parse('https://api.openai.com'),
+      mockApi: false,
+    );
+    final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
+      ..httpClientAdapter = adapter;
+    final client = DioOpenAIClient(dio: dio, config: config);
+
+    const request = OpenAIChatRequest(
+      model: 'gpt-5-mini',
+      maxTokens: 120,
+      messages: [
+        OpenAIChatMessage(role: 'system', content: 'system'),
+        OpenAIChatMessage(role: 'user', content: 'prompt'),
+      ],
+    );
+
+    await client.createChatCompletion(request);
+
+    expect(adapter.lastRequest?.path, '/v1/responses');
+    expect(adapter.lastData, {
+      'model': 'gpt-5-mini',
+      'input': [
+        {
+          'role': 'system',
+          'content': [
+            {'type': 'input_text', 'text': 'system'},
+          ],
+        },
+        {
+          'role': 'user',
+          'content': [
+            {'type': 'input_text', 'text': 'prompt'},
+          ],
+        },
+      ],
+      'max_output_tokens': 120,
+    });
+  });
+
+  test('DioOpenAIClient handles output_text list of objects', () async {
+    const responseBody = {
+      'output_text': [
+        {'type': 'output_text', 'text': 'ok'},
+      ],
+    };
+    final adapter = RecordingAdapter(jsonEncode(responseBody));
+    final config = EnvConfig(
+      apiKey: 'test-key',
+      model: 'gpt-5-mini',
+      baseUrl: Uri.parse('https://api.openai.com'),
+      mockApi: false,
+    );
+    final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
+      ..httpClientAdapter = adapter;
+    final client = DioOpenAIClient(dio: dio, config: config);
+
+    const request = OpenAIChatRequest(
+      model: 'gpt-5-mini',
+      maxTokens: 120,
+      messages: [
+        OpenAIChatMessage(role: 'system', content: 'system'),
+        OpenAIChatMessage(role: 'user', content: 'prompt'),
+      ],
+    );
+
+    final response = await client.createChatCompletion(request);
+
+    expect(response.choices.first.message.content, 'ok');
+  });
+
+  test('DioOpenAIClient surfaces incomplete responses', () async {
+    const responseBody = {
+      'status': 'incomplete',
+      'incomplete_details': {'reason': 'max_output_tokens'},
+      'output': [],
+    };
+    final adapter = RecordingAdapter(jsonEncode(responseBody));
+    final config = EnvConfig(
+      apiKey: 'test-key',
+      model: 'gpt-5-mini',
+      baseUrl: Uri.parse('https://api.openai.com'),
+      mockApi: false,
+    );
+    final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
+      ..httpClientAdapter = adapter;
+    final client = DioOpenAIClient(dio: dio, config: config);
+
+    const request = OpenAIChatRequest(
+      model: 'gpt-5-mini',
+      maxTokens: 120,
+      messages: [
+        OpenAIChatMessage(role: 'system', content: 'system'),
+        OpenAIChatMessage(role: 'user', content: 'prompt'),
+      ],
+    );
+
+    expect(
+      () => client.createChatCompletion(request),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'Response incomplete: max_output_tokens.',
+        ),
+      ),
+    );
+  });
 }

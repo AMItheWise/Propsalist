@@ -30,7 +30,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
     try {
       final request = OpenAIChatRequest(
         model: _config.model,
-        maxTokens: 256,
+        maxTokens: maxTokensLimit,
         messages: [
           const OpenAIChatMessage(role: 'system', content: clarificationPrompt),
           OpenAIChatMessage(role: 'user', content: prompt),
@@ -44,13 +44,11 @@ class ProposalRepositoryImpl implements ProposalRepository {
         );
       }
 
-      final content = _stripJsonCodeFence(
-        response.choices.first.message.content.trim(),
-      );
-      final payload = jsonDecode(content);
-      if (payload is! Map<String, dynamic>) {
+      final content = response.choices.first.message.content.trim();
+      final payload = _parseClarificationPayload(content);
+      if (payload == null) {
         return const FailureResult(
-          ParsingFailure('Clarification response was not a JSON object.'),
+          ParsingFailure('Clarification response was not valid JSON.'),
         );
       }
 
@@ -84,7 +82,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
       );
     } on DioException catch (error) {
       return FailureResult(
-        NetworkFailure('Failed to reach the OpenAI API.', cause: error),
+        NetworkFailure(_describeDioError(error), cause: error),
       );
     } on FormatException catch (error) {
       return FailureResult(
@@ -146,7 +144,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
       return Success(Proposal(content: content));
     } on DioException catch (error) {
       return FailureResult(
-        NetworkFailure('Failed to reach the OpenAI API.', cause: error),
+        NetworkFailure(_describeDioError(error), cause: error),
       );
     } on FormatException catch (error) {
       return FailureResult(
@@ -168,5 +166,47 @@ class ProposalRepositoryImpl implements ProposalRepository {
       }
     }
     return trimmed.trim();
+  }
+
+  Map<String, dynamic>? _parseClarificationPayload(String content) {
+    final trimmed = _stripJsonCodeFence(content);
+    final directPayload = _decodeJsonObject(trimmed);
+    if (directPayload != null) {
+      return directPayload;
+    }
+
+    final start = trimmed.indexOf('{');
+    final end = trimmed.lastIndexOf('}');
+    if (start == -1 || end == -1 || end <= start) {
+      return null;
+    }
+
+    final candidate = trimmed.substring(start, end + 1);
+    return _decodeJsonObject(candidate);
+  }
+
+  Map<String, dynamic>? _decodeJsonObject(String content) {
+    try {
+      final payload = jsonDecode(content);
+      if (payload is Map<String, dynamic>) {
+        return payload;
+      }
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _describeDioError(DioException error) {
+    final response = error.response;
+    if (response == null) {
+      return 'Failed to reach the OpenAI API.';
+    }
+
+    final status = response.statusCode;
+    final data = response.data;
+    final body = data == null ? 'No response body.' : data.toString();
+    final statusLabel = status == null ? '' : ' ($status)';
+    return 'OpenAI API error$statusLabel: $body';
   }
 }
