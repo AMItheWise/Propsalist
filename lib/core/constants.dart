@@ -1,6 +1,6 @@
 const defaultMaxTokens = 256;
 const minTokens = 64;
-const maxTokensLimit = 512;
+const maxTokensLimit = 1024;
 const defaultOpenAiModel = 'gpt-5-mini';
 const defaultOpenAiBaseUrl = 'https://api.openai.com';
 const clarificationPrompt = '''
