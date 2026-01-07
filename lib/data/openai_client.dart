@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -32,6 +34,10 @@ class DioOpenAIClient implements OpenAIClient {
       return _createResponseCompletion(request);
     }
 
+    _debugLog('OpenAI chat request', {
+      'endpoint': '/v1/chat/completions',
+      'body': request.toJson(),
+    });
     final response = await _dio.post<Map<String, dynamic>>(
       '/v1/chat/completions',
       data: request.toJson(),
@@ -39,6 +45,7 @@ class DioOpenAIClient implements OpenAIClient {
     );
 
     final data = response.data;
+    _debugLog('OpenAI chat response', data);
     if (data == null) {
       throw const FormatException('Empty response body.');
     }
@@ -53,13 +60,19 @@ class DioOpenAIClient implements OpenAIClient {
   Future<OpenAIChatResponse> _createResponseCompletion(
     OpenAIChatRequest request,
   ) async {
+    final payload = _buildResponsesRequest(request);
+    _debugLog('OpenAI responses request', {
+      'endpoint': '/v1/responses',
+      'body': payload,
+    });
     final response = await _dio.post<Map<String, dynamic>>(
       '/v1/responses',
-      data: _buildResponsesRequest(request),
+      data: payload,
       options: Options(headers: buildHeaders()),
     );
 
     final data = response.data;
+    _debugLog('OpenAI responses response', data);
     if (data == null) {
       throw const FormatException('Empty response body.');
     }
@@ -136,5 +149,19 @@ class DioOpenAIClient implements OpenAIClient {
 
     final text = buffer.toString();
     return text.isEmpty ? null : text;
+  }
+
+  void _debugLog(String label, Object? payload) {
+    if (!kDebugMode) {
+      return;
+    }
+
+    String serialized;
+    try {
+      serialized = const JsonEncoder.withIndent('  ').convert(payload);
+    } catch (_) {
+      serialized = payload.toString();
+    }
+    debugPrint('[$label]\n$serialized');
   }
 }
