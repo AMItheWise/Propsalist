@@ -26,14 +26,24 @@ class ProposalRepositoryImpl implements ProposalRepository {
   @override
   Future<Result<ClarificationResponse>> requestClarifications({
     required String prompt,
+    String? userProfileContext,
   }) async {
     try {
+      final userContext = StringBuffer();
+      if (userProfileContext != null && userProfileContext.trim().isNotEmpty) {
+        userContext
+          ..writeln('Saved user profile:')
+          ..writeln(userProfileContext.trim())
+          ..writeln();
+      }
+      userContext.writeln('User request: $prompt');
+
       final request = OpenAIChatRequest(
         model: _config.model,
         maxTokens: maxTokensLimit,
         messages: [
           const OpenAIChatMessage(role: 'system', content: clarificationPrompt),
-          OpenAIChatMessage(role: 'user', content: prompt),
+          OpenAIChatMessage(role: 'user', content: userContext.toString()),
         ],
       );
 
@@ -105,11 +115,17 @@ class ProposalRepositoryImpl implements ProposalRepository {
     required int maxTokens,
     required String summary,
     String? clarificationAnswers,
+    String? userProfileContext,
   }) async {
     try {
       final userContext = StringBuffer()
         ..writeln('User request: $prompt')
         ..writeln('Intake summary: $summary');
+      if (userProfileContext != null && userProfileContext.trim().isNotEmpty) {
+        userContext
+          ..writeln('Saved user profile:')
+          ..writeln(userProfileContext.trim());
+      }
       if (clarificationAnswers != null &&
           clarificationAnswers.trim().isNotEmpty) {
         userContext.writeln('Clarification answers: $clarificationAnswers');

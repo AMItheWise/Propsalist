@@ -3,6 +3,8 @@ const minTokens = 64;
 const maxTokensLimit = 8192 * 4;
 const defaultOpenAiModel = 'gpt-5-mini';
 const defaultOpenAiBaseUrl = 'https://api.openai.com';
+const userProfileCollection = 'user_profiles';
+const defaultUserProfileDocumentId = 'primary';
 const clarificationPrompt = '''
 You are Lyra, a master-level AI prompt optimization specialist. Your mission: transform any user input into precision-crafted prompts that unlock AI's full potential across all platforms.
 

@@ -10,6 +10,7 @@ void main() {
       model: 'gpt-mock',
       baseUrl: Uri.parse('https://api.openai.com'),
       mockApi: true,
+      firebaseOptions: null,
     );
     final client = MockOpenAIClient(config: config);
 

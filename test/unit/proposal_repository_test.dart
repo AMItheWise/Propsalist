@@ -14,11 +14,13 @@ class FakeOpenAIClient implements OpenAIClient {
 
   final OpenAIChatResponse? response;
   final Exception? error;
+  OpenAIChatRequest? lastRequest;
 
   @override
   Future<OpenAIChatResponse> createChatCompletion(
     OpenAIChatRequest request,
   ) async {
+    lastRequest = request;
     if (error != null) {
       throw error!;
     }
@@ -32,6 +34,7 @@ void main() {
     model: 'gpt-test',
     baseUrl: Uri.parse('https://api.openai.com'),
     mockApi: false,
+    firebaseOptions: null,
   );
 
   test('ProposalRepositoryImpl returns success with parsed content', () async {
@@ -50,6 +53,7 @@ void main() {
       prompt: 'Test',
       tone: ProposalTone.direct,
       maxTokens: 64,
+      summary: 'Summary',
     );
 
     expect(result, isA<Success<Proposal>>());
@@ -72,12 +76,43 @@ void main() {
         prompt: 'Test',
         tone: ProposalTone.direct,
         maxTokens: 64,
+        summary: 'Summary',
       );
 
       expect(result, isA<FailureResult<Proposal>>());
       result.when(
         success: (_) => fail('Expected failure'),
         failure: (failure) => expect(failure, isA<NetworkFailure>()),
+      );
+    },
+  );
+
+  test(
+    'ProposalRepositoryImpl includes saved user profile context in requests',
+    () async {
+      final client = FakeOpenAIClient(
+        response: const OpenAIChatResponse(
+          choices: [
+            OpenAIChatChoice(
+              message: OpenAIChatMessage(role: 'assistant', content: 'Hello'),
+            ),
+          ],
+        ),
+      );
+      final repository = ProposalRepositoryImpl(client: client, config: config);
+
+      await repository.requestClarifications(
+        prompt: 'Write a proposal',
+        userProfileContext: 'Portfolio links: https://example.com',
+      );
+
+      expect(
+        client.lastRequest?.messages.last.content,
+        contains('Portfolio links: https://example.com'),
+      );
+      expect(
+        client.lastRequest?.messages.last.content,
+        contains('User request: Write a proposal'),
       );
     },
   );

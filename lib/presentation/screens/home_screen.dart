@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:proposal_writer/core/constants.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 import 'package:proposal_writer/presentation/state/home_providers.dart';
+import 'package:proposal_writer/presentation/widgets/user_profile_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -50,6 +51,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const UserProfileCard(),
+                    const SizedBox(height: 24),
                     TextField(
                       key: const Key('promptField'),
                       controller: _promptController,
@@ -96,6 +99,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ref.read(maxTokensProvider.notifier).state = value
                             .round();
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Saved profile context is automatically included in clarification and proposal generation.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 16),
                     FilledButton(

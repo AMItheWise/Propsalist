@@ -5,11 +5,13 @@ class ProposalRequest {
     required this.prompt,
     required this.tone,
     required this.maxTokens,
+    required this.userProfileContext,
   });
 
   final String prompt;
   final ProposalTone tone;
   final int maxTokens;
+  final String? userProfileContext;
 }
 
 class ProposalFlowState {

@@ -52,6 +52,7 @@ void main() {
         model: 'gpt-test',
         baseUrl: Uri.parse('https://api.openai.com'),
         mockApi: false,
+        firebaseOptions: null,
       );
       final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
         ..httpClientAdapter = adapter;
@@ -93,6 +94,7 @@ void main() {
       model: 'gpt-5-mini',
       baseUrl: Uri.parse('https://api.openai.com'),
       mockApi: false,
+      firebaseOptions: null,
     );
     final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
       ..httpClientAdapter = adapter;
@@ -142,6 +144,7 @@ void main() {
       model: 'gpt-5-mini',
       baseUrl: Uri.parse('https://api.openai.com'),
       mockApi: false,
+      firebaseOptions: null,
     );
     final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
       ..httpClientAdapter = adapter;
@@ -173,6 +176,7 @@ void main() {
       model: 'gpt-5-mini',
       baseUrl: Uri.parse('https://api.openai.com'),
       mockApi: false,
+      firebaseOptions: null,
     );
     final dio = Dio(BaseOptions(baseUrl: config.baseUrl.toString()))
       ..httpClientAdapter = adapter;

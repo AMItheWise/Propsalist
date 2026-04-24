@@ -6,6 +6,7 @@ import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 abstract class ProposalRepository {
   Future<Result<ClarificationResponse>> requestClarifications({
     required String prompt,
+    String? userProfileContext,
   });
 
   Future<Result<Proposal>> generateProposal({
@@ -14,5 +15,6 @@ abstract class ProposalRepository {
     required int maxTokens,
     required String summary,
     String? clarificationAnswers,
+    String? userProfileContext,
   });
 }

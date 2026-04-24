@@ -19,10 +19,25 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
     required ProposalTone tone,
     required int maxTokens,
   }) async {
+    String? userProfileContext;
+    final profileResult = await _ref
+        .read(userProfileUseCaseProvider)
+        .loadProfile();
+    profileResult.when(
+      success: (profile) {
+        final context = profile?.toPromptContext();
+        if (context != null && context.isNotEmpty) {
+          userProfileContext = context;
+        }
+      },
+      failure: (_) {},
+    );
+
     final request = ProposalRequest(
       prompt: prompt,
       tone: tone,
       maxTokens: maxTokens,
+      userProfileContext: userProfileContext,
     );
     state = state.copyWith(
       isLoading: true,
@@ -34,7 +49,10 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       pendingRequest: request,
     );
     final useCase = _ref.read(proposalFlowUseCaseProvider);
-    final result = await useCase.requestClarifications(prompt: prompt);
+    final result = await useCase.requestClarifications(
+      prompt: prompt,
+      userProfileContext: request.userProfileContext,
+    );
     await result.when(
       success: (clarification) async {
         if (clarification.hasQuestions) {
@@ -76,6 +94,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
     final useCase = _ref.read(proposalFlowUseCaseProvider);
     final result = await useCase.requestClarifications(
       prompt: clarifiedPrompt.toString(),
+      userProfileContext: request.userProfileContext,
     );
     await result.when(
       success: (clarification) async {
@@ -119,6 +138,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       maxTokens: request.maxTokens,
       summary: summary,
       clarificationAnswers: clarificationAnswers,
+      userProfileContext: request.userProfileContext,
     );
     state = result.when(
       success: (proposal) => state.copyWith(

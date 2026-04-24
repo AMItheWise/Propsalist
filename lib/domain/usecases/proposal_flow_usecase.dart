@@ -12,8 +12,12 @@ class ProposalFlowUseCase {
 
   Future<Result<ClarificationResponse>> requestClarifications({
     required String prompt,
+    String? userProfileContext,
   }) {
-    return _repository.requestClarifications(prompt: prompt);
+    return _repository.requestClarifications(
+      prompt: prompt,
+      userProfileContext: userProfileContext,
+    );
   }
 
   Future<Result<Proposal>> generateProposal({
@@ -22,6 +26,7 @@ class ProposalFlowUseCase {
     required int maxTokens,
     required String summary,
     String? clarificationAnswers,
+    String? userProfileContext,
   }) {
     return _repository.generateProposal(
       prompt: prompt,
@@ -29,6 +34,7 @@ class ProposalFlowUseCase {
       maxTokens: maxTokens,
       summary: summary,
       clarificationAnswers: clarificationAnswers,
+      userProfileContext: userProfileContext,
     );
   }
 }

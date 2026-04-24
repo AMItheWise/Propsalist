@@ -1,14 +1,34 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:proposal_writer/core/di/providers.dart';
+import 'package:proposal_writer/core/env.dart';
 import 'package:proposal_writer/presentation/screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {}
 
-  runApp(const ProviderScope(child: ProposalWriterApp()));
+  final config = EnvConfig.fromEnvironment(dotenv: dotenv.env);
+  if (config.isFirebaseConfigured) {
+    try {
+      await Firebase.initializeApp(options: config.firebaseOptions);
+    } catch (error) {
+      debugPrint('Firebase initialization failed: $error');
+    }
+  }
+
+  runApp(
+    ProviderScope(
+      overrides: [envConfigProvider.overrideWithValue(config)],
+      child: const ProposalWriterApp(),
+    ),
+  );
 }
 
 class ProposalWriterApp extends StatelessWidget {

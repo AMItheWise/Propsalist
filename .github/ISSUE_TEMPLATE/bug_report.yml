@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a reproducible bug in the app, tests, or developer workflow.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please include enough detail for someone else to reproduce the problem.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the bug.
+      placeholder: The profile save button fails on web when Firebase is configured.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Affected platform
+      options:
+        - Android
+        - iOS
+        - Web
+        - Windows
+        - macOS
+        - Linux
+        - CI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the exact sequence needed to reproduce the issue.
+      placeholder: |
+        1. Run the app with ...
+        2. Open the profile form ...
+        3. Click save ...
+        4. Observe the error ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant logs, stack traces, or screenshots.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Flutter or app version
+      placeholder: Flutter 3.x / app commit SHA

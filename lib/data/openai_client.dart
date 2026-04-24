@@ -100,10 +100,7 @@ class DioOpenAIClient implements OpenAIClient {
             (message) => <String, dynamic>{
               'role': message.role,
               'content': [
-                {
-                  'type': 'input_text',
-                  'text': message.content,
-                },
+                {'type': 'input_text', 'text': message.content},
               ],
             },
           )
