@@ -2,7 +2,6 @@ import 'package:proposal_writer/core/constants.dart';
 
 class UserProfile {
   const UserProfile({
-    this.id = defaultUserProfileDocumentId,
     required this.fullName,
     required this.email,
     required this.professionalTitle,
@@ -11,6 +10,7 @@ class UserProfile {
     required this.profileImageUrl,
     required this.portfolioLinks,
     required this.education,
+    this.id = defaultUserProfileDocumentId,
   });
 
   factory UserProfile.empty() => const UserProfile(

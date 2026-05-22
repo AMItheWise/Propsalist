@@ -176,7 +176,7 @@ class ProposalRepositoryImpl implements ProposalRepository {
   String _stripJsonCodeFence(String content) {
     var trimmed = content.trim();
     if (trimmed.startsWith('```')) {
-      trimmed = trimmed.replaceFirst(RegExp(r'^```(?:json)?'), '');
+      trimmed = trimmed.replaceFirst(RegExp('^```(?:json)?'), '');
       if (trimmed.endsWith('```')) {
         trimmed = trimmed.substring(0, trimmed.length - 3);
       }

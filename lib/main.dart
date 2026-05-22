@@ -1,17 +1,17 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:proposal_writer/core/di/providers.dart';
 import 'package:proposal_writer/core/env.dart';
 import 'package:proposal_writer/presentation/screens/home_screen.dart';
+import 'package:proposal_writer/presentation/theme/proposalist_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load();
   } catch (_) {}
 
   final config = EnvConfig.fromEnvironment(dotenv: dotenv.env);
@@ -38,10 +38,7 @@ class ProposalWriterApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Proposal Writer',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
+      theme: buildProposalistTheme(),
       home: const HomeScreen(),
     );
   }

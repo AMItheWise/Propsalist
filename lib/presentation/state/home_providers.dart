@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:proposal_writer/core/constants.dart';
 import 'package:proposal_writer/core/di/providers.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
+import 'package:proposal_writer/presentation/models/mock_dashboard_data.dart';
 import 'package:proposal_writer/presentation/state/proposal_flow_state.dart';
 
 final promptProvider = StateProvider<String>((ref) => '');
 final toneProvider = StateProvider<ProposalTone>((ref) => ProposalTone.direct);
 final maxTokensProvider = StateProvider<int>((ref) => defaultMaxTokens);
+final mockProposalCardsProvider = Provider<List<MockProposalCard>>(
+  (ref) => mockProposals,
+);
 
 class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
   ProposalFlowNotifier(this._ref) : super(ProposalFlowState.initial());
@@ -40,6 +44,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       userProfileContext: userProfileContext,
     );
     state = state.copyWith(
+      stage: ProposalFlowStage.requestingClarifications,
       isLoading: true,
       awaitingClarifications: false,
       questions: [],
@@ -57,6 +62,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       success: (clarification) async {
         if (clarification.hasQuestions) {
           state = state.copyWith(
+            stage: ProposalFlowStage.awaitingClarifications,
             isLoading: false,
             awaitingClarifications: true,
             questions: clarification.questions,
@@ -73,6 +79,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       },
       failure: (failure) async {
         state = state.copyWith(
+          stage: ProposalFlowStage.failure,
           isLoading: false,
           awaitingClarifications: false,
           errorMessage: failure.message,
@@ -87,7 +94,11 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
     if (request == null || summary == null) {
       return;
     }
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(
+      stage: ProposalFlowStage.requestingClarifications,
+      isLoading: true,
+      errorMessage: null,
+    );
     final clarifiedPrompt = StringBuffer()
       ..writeln('User request: ${request.prompt}')
       ..writeln('Clarification answers: $answers');
@@ -100,6 +111,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       success: (clarification) async {
         if (clarification.hasQuestions) {
           state = state.copyWith(
+            stage: ProposalFlowStage.awaitingClarifications,
             isLoading: false,
             awaitingClarifications: true,
             questions: clarification.questions,
@@ -117,6 +129,7 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       },
       failure: (failure) async {
         state = state.copyWith(
+          stage: ProposalFlowStage.failure,
           isLoading: false,
           awaitingClarifications: false,
           errorMessage: failure.message,
@@ -131,6 +144,12 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
     String? clarificationAnswers,
     String? promptOverride,
   }) async {
+    state = state.copyWith(
+      stage: ProposalFlowStage.generating,
+      isLoading: true,
+      awaitingClarifications: false,
+      errorMessage: null,
+    );
     final useCase = _ref.read(proposalFlowUseCaseProvider);
     final result = await useCase.generateProposal(
       prompt: promptOverride ?? request.prompt,
@@ -142,12 +161,14 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
     );
     state = result.when(
       success: (proposal) => state.copyWith(
+        stage: ProposalFlowStage.completed,
         isLoading: false,
         awaitingClarifications: false,
         proposal: proposal.content,
         errorMessage: null,
       ),
       failure: (failure) => state.copyWith(
+        stage: ProposalFlowStage.failure,
         isLoading: false,
         awaitingClarifications: false,
         errorMessage: failure.message,

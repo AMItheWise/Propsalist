@@ -10,11 +10,21 @@ void main() {
     await app.main();
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const Key('bottomNavNewProposal')));
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const Key('promptField')),
       'Create a proposal',
     );
     await tester.pump();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('generateButton')),
+      360,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('generateButton')));
     await tester.pump();

@@ -165,10 +165,10 @@ void main() {
   });
 
   test('DioOpenAIClient surfaces incomplete responses', () async {
-    const responseBody = {
+    const responseBody = <String, Object?>{
       'status': 'incomplete',
-      'incomplete_details': {'reason': 'max_output_tokens'},
-      'output': [],
+      'incomplete_details': <String, Object?>{'reason': 'max_output_tokens'},
+      'output': <Object?>[],
     };
     final adapter = RecordingAdapter(jsonEncode(responseBody));
     final config = EnvConfig(
