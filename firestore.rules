@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUserData(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function validUserMetadata() {
+      return request.resource.data.keys().hasOnly([
+        'createdAt',
+        'updatedAt',
+        'authProvider',
+        'schemaVersion',
+        'legacyProfileMigratedAt',
+      ]) &&
+      request.resource.data.authProvider in ['anonymous', 'firebase'] &&
+      request.resource.data.schemaVersion is int;
+    }
+
+    function validOwnedDocument(uid) {
+      return !('ownerId' in request.resource.data) ||
+        request.resource.data.ownerId == uid;
+    }
+
+    match /user_profiles/{profileId} {
+      allow get: if signedIn() && profileId == 'primary';
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if ownsUserData(uid);
+      allow create, update: if ownsUserData(uid) && validUserMetadata();
+
+      match /profiles/{profileId} {
+        allow read, delete: if ownsUserData(uid);
+        allow create, update: if ownsUserData(uid) && validOwnedDocument(uid);
+      }
+
+      match /proposals/{proposalId} {
+        allow read, delete: if ownsUserData(uid);
+        allow create, update: if ownsUserData(uid) && validOwnedDocument(uid);
+      }
+
+      match /settings/{settingsId} {
+        allow read, delete: if ownsUserData(uid);
+        allow create, update: if ownsUserData(uid) && validOwnedDocument(uid);
+      }
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

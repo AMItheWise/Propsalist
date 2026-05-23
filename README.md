@@ -30,6 +30,7 @@ It is designed as a practical cross-platform starter for teams that want:
 - Riverpod
 - Dio
 - Firebase Core
+- Firebase Auth
 - Cloud Firestore
 - GitHub Actions
 
@@ -39,14 +40,18 @@ This repository is suitable for public GitHub publication as an open-source
 project scaffold. It intentionally does not commit secrets or Firebase config
 files.
 
-Current Firestore storage uses a single document:
+Current Firestore storage uses Firebase anonymous authentication and
+user-owned documents:
 
 ```text
-user_profiles/primary
+users/{uid}
+users/{uid}/profiles/primary
+users/{uid}/proposals/{proposalId}
+users/{uid}/settings/app
 ```
 
-If you want true multi-user storage, add Firebase Authentication and switch the
-document id from `primary` to `currentUser.uid`.
+The legacy `user_profiles/primary` document is read only for one-time migration
+into the signed-in user's profile path.
 
 ## Quick Start
 
@@ -93,7 +98,8 @@ OPENAI_BASE_URL=https://api.openai.com
 
 ### Firebase / Firestore
 
-Required if you want the profile editor to save data to Firestore:
+Required if you want anonymous auth and the profile editor to save user-owned
+data to Firestore:
 
 ```ini
 FIREBASE_API_KEY=your_firebase_api_key
@@ -109,8 +115,14 @@ FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
 FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
+In Firebase Console:
+
+1. Enable **Authentication > Sign-in method > Anonymous**.
+2. Create or enable **Cloud Firestore**.
+3. Deploy the repository rules from `firestore.rules`.
+
 If Firebase is not configured, the app still runs, but profile saving is
-disabled.
+disabled and the app uses the deterministic local user id `local-user`.
 
 ### Local `.env` Example
 
@@ -143,7 +155,11 @@ flutter run --dart-define=MOCK_API=true
 
 ## Firestore Data Model
 
-The profile form persists the following fields in Firestore:
+The profile form persists the following fields in:
+
+```text
+users/{uid}/profiles/primary
+```
 
 - `fullName`
 - `email`
@@ -157,6 +173,9 @@ The profile form persists the following fields in Firestore:
 `profileImageUrl` is stored as a string. If you want to store the actual image
 asset, upload it to Firebase Storage and save the URL or storage path in
 Firestore.
+
+Firestore rules live in `firestore.rules`. To validate the rules with the
+emulator, see [Firestore Rules Validation](docs/redesign/firestore-rules-testing.md).
 
 ## Development
 
@@ -215,8 +234,8 @@ GitHub Actions runs:
 Before publishing publicly, you should still do these repo-owner steps:
 
 - review git history for accidentally committed secrets
-- configure Firebase Authentication if you need per-user data isolation
-- set Firestore security rules for your production project
+- configure Firebase Authentication providers beyond anonymous auth if needed
+- deploy and validate Firestore security rules for your production project
 - add the final GitHub repo description, topics, and social preview image
 - decide whether MIT is the license you want long term
 

@@ -1,13 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:proposal_writer/core/env.dart';
+import 'package:proposal_writer/core/result.dart';
+import 'package:proposal_writer/data/auth_repository_impl.dart';
 import 'package:proposal_writer/data/openai_client.dart';
 import 'package:proposal_writer/data/openai_mock_client.dart';
 import 'package:proposal_writer/data/proposal_repository_impl.dart';
+import 'package:proposal_writer/data/user_data_path_resolver.dart';
 import 'package:proposal_writer/data/user_profile_repository_impl.dart';
+import 'package:proposal_writer/domain/entities/app_user.dart';
+import 'package:proposal_writer/domain/repositories/auth_repository.dart';
 import 'package:proposal_writer/domain/repositories/proposal_repository.dart';
 import 'package:proposal_writer/domain/repositories/user_profile_repository.dart';
 import 'package:proposal_writer/domain/usecases/proposal_flow_usecase.dart';
@@ -49,13 +55,44 @@ final proposalFlowUseCaseProvider = Provider<ProposalFlowUseCase>((ref) {
   return ProposalFlowUseCase(repository: ref.watch(proposalRepositoryProvider));
 });
 
+final userDataPathResolverProvider = Provider<UserDataPathResolver>((ref) {
+  return const UserDataPathResolver();
+});
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final config = ref.watch(envConfigProvider);
+  if (!config.isFirebaseConfigured) {
+    return const LocalAuthRepository();
+  }
+
+  final firestore = FirebaseFirestore.instance;
+  final pathResolver = ref.watch(userDataPathResolverProvider);
+  return FirebaseAuthRepository(
+    authGateway: FirebaseAuthGateway(auth: FirebaseAuth.instance),
+    userDataInitializer: FirebaseUserDataInitializer(
+      firestore: firestore,
+      pathResolver: pathResolver,
+    ),
+  );
+});
+
+final authBootstrapProvider = FutureProvider<Result<AppUser>>((ref) {
+  return ref.watch(authRepositoryProvider).ensureSignedIn();
+});
+
 final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
   final config = ref.watch(envConfigProvider);
   if (!config.isFirebaseConfigured) {
     return const DisabledUserProfileRepository();
   }
 
-  return FirestoreUserProfileRepository(firestore: FirebaseFirestore.instance);
+  final firestore = FirebaseFirestore.instance;
+  final pathResolver = ref.watch(userDataPathResolverProvider);
+  return FirestoreUserProfileRepository(
+    firestore: firestore,
+    authRepository: ref.watch(authRepositoryProvider),
+    pathResolver: pathResolver,
+  );
 });
 
 final userProfileUseCaseProvider = Provider<UserProfileUseCase>((ref) {

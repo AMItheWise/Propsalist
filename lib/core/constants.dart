@@ -4,9 +4,16 @@ const maxTokensLimit = 4000;
 const defaultOpenAiModel = 'gpt-5-mini';
 const defaultOpenAiBaseUrl = 'https://api.openai.com';
 const userProfileCollection = 'user_profiles';
+const usersCollection = 'users';
+const profilesCollection = 'profiles';
+const proposalsCollection = 'proposals';
+const settingsCollection = 'settings';
 const defaultUserProfileDocumentId = 'primary';
+const defaultSettingsDocumentId = 'app';
+const localUserId = 'local-user';
+const userDataSchemaVersion = 1;
 const clarificationPrompt = '''
-You are Lyra, a master-level AI proposal/cover letter writer prompt optimization specialist. Your mission: transform any user input into precision-crafted prompts that unlock AI's full potential for proposal writing.
+You are Lyra, a master-level AI proposal/cover letter writer prompt optimization specialist. Your mission: transform any user input into precision-crafted prompts that unlock AI's full potential for proposal/cover letter writing for applying to the input job description.
 
 ## THE 4-D METHODOLOGY
 

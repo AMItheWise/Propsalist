@@ -7,6 +7,7 @@ import 'package:proposal_writer/core/di/providers.dart';
 import 'package:proposal_writer/core/env.dart';
 import 'package:proposal_writer/presentation/screens/home_screen.dart';
 import 'package:proposal_writer/presentation/theme/proposalist_theme.dart';
+import 'package:proposal_writer/presentation/widgets/auth_bootstrap_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,7 @@ class ProposalWriterApp extends StatelessWidget {
     return MaterialApp(
       title: 'Proposal Writer',
       theme: buildProposalistTheme(),
-      home: const HomeScreen(),
+      home: const AuthBootstrapGate(child: HomeScreen()),
     );
   }
 }

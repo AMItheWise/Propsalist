@@ -136,7 +136,7 @@ class _UserProfileCardState extends ConsumerState<UserProfileCard> {
       success: (_) {
         setState(() {
           _isSaving = false;
-          _message = 'Profile saved to Firestore.';
+          _message = 'Profile saved to your user-owned Firestore path.';
           _messageIsError = false;
         });
       },
@@ -203,8 +203,8 @@ class _UserProfileCardState extends ConsumerState<UserProfileCard> {
         const SizedBox(height: ProposalistSpacing.md),
         if (!isFirestoreConfigured)
           Text(
-            'Firestore is not configured yet. Add the FIREBASE_* values '
-            'from README before saving.',
+            'Firestore is not configured yet. Add the FIREBASE_* values from '
+            'README to enable user-owned profile persistence.',
             key: const Key('firestoreConfigHint'),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),

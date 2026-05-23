@@ -17,6 +17,10 @@ class ConfigurationFailure extends Failure {
   const ConfigurationFailure(super.message, {super.cause});
 }
 
+class AuthenticationFailure extends Failure {
+  const AuthenticationFailure(super.message, {super.cause});
+}
+
 class StorageFailure extends Failure {
   const StorageFailure(super.message, {super.cause});
 }
