@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:proposal_writer/core/constants.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 import 'package:proposal_writer/presentation/models/mock_dashboard_data.dart';
+import 'package:proposal_writer/presentation/navigation/proposalist_page_route.dart';
 import 'package:proposal_writer/presentation/state/home_providers.dart';
 import 'package:proposal_writer/presentation/state/proposal_flow_state.dart';
 import 'package:proposal_writer/presentation/theme/proposalist_theme.dart';
@@ -29,6 +30,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final List<TextEditingController> _clarificationControllers = [];
 
   _HomeTab _selectedTab = _HomeTab.dashboard;
+  _HomeTab _previousTab = _HomeTab.dashboard;
 
   @override
   void initState() {
@@ -59,16 +61,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: _buildSelectedTab(),
+            child: _AnimatedHomeTabBody(
+              selectedTab: _selectedTab,
+              direction: _tabTransitionDirection,
+              child: _buildSelectedTab(),
+            ),
           ),
         ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) {
-          setState(() {
-            _selectedTab = _HomeTab.values[index];
-          });
+          _selectTab(_HomeTab.values[index]);
         },
         destinations: const [
           NavigationDestination(
@@ -115,9 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildSelectedTab() {
     return switch (_selectedTab) {
       _HomeTab.dashboard => _DashboardTab(
-        onNewProposal: () => setState(() {
-          _selectedTab = _HomeTab.newProposal;
-        }),
+        onNewProposal: () => _selectTab(_HomeTab.newProposal),
       ),
       _HomeTab.newProposal => _NewProposalTab(
         projectTitleController: _projectTitleController,
@@ -135,20 +137,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onContinue: _submitClarifications,
       ),
       _HomeTab.proposals => _ProposalsTab(
-        onNewProposal: () => setState(() {
-          _selectedTab = _HomeTab.newProposal;
-        }),
+        onNewProposal: () => _selectTab(_HomeTab.newProposal),
       ),
       _HomeTab.profile => const _ProfileTab(),
     };
   }
 
+  int get _tabTransitionDirection {
+    final previousIndex = _HomeTab.values.indexOf(_previousTab);
+    final selectedIndex = _HomeTab.values.indexOf(_selectedTab);
+    return selectedIndex >= previousIndex ? 1 : -1;
+  }
+
+  void _selectTab(_HomeTab tab) {
+    if (_selectedTab == tab) {
+      return;
+    }
+    setState(() {
+      _previousTab = _selectedTab;
+      _selectedTab = tab;
+    });
+  }
+
   Future<void> _generateProposal() async {
     FocusScope.of(context).unfocus();
     _disposeClarificationControllers();
-    setState(() {
-      _selectedTab = _HomeTab.proposals;
-    });
+    _selectTab(_HomeTab.proposals);
     await ref
         .read(proposalFlowProvider.notifier)
         .start(
@@ -160,29 +174,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
     final state = ref.read(proposalFlowProvider);
-    setState(() {
-      _selectedTab = state.awaitingClarifications
+    _selectTab(
+      state.awaitingClarifications
           ? _HomeTab.clarifications
-          : _HomeTab.proposals;
-    });
+          : _HomeTab.proposals,
+    );
   }
 
   Future<void> _submitClarifications() async {
     FocusScope.of(context).unfocus();
     final questions = ref.read(proposalFlowProvider).questions;
     final answers = _formatClarificationAnswers(questions);
-    setState(() {
-      _selectedTab = _HomeTab.proposals;
-    });
+    _selectTab(_HomeTab.proposals);
     await ref.read(proposalFlowProvider.notifier).submitClarifications(answers);
     if (!mounted) {
       return;
     }
     final state = ref.read(proposalFlowProvider);
     if (state.awaitingClarifications) {
-      setState(() {
-        _selectedTab = _HomeTab.clarifications;
-      });
+      _selectTab(_HomeTab.clarifications);
     }
   }
 
@@ -224,6 +234,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       controller.dispose();
     }
     _clarificationControllers.clear();
+  }
+}
+
+class _AnimatedHomeTabBody extends StatelessWidget {
+  const _AnimatedHomeTabBody({
+    required this.selectedTab,
+    required this.direction,
+    required this.child,
+  });
+
+  final _HomeTab selectedTab;
+  final int direction;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedSwitcher(
+        key: const Key('proposalistTabSwitcher'),
+        duration: const Duration(milliseconds: 320),
+        reverseDuration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            fit: StackFit.expand,
+            alignment: Alignment.topCenter,
+            children: [
+              for (final previousChild in previousChildren)
+                Positioned.fill(child: previousChild),
+              if (currentChild != null) Positioned.fill(child: currentChild),
+            ],
+          );
+        },
+        transitionBuilder: (child, animation) {
+          final curvedAnimation = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          final offsetAnimation = curvedAnimation.drive(
+            Tween<Offset>(begin: Offset(0.08 * direction, 0), end: Offset.zero),
+          );
+
+          return FadeTransition(
+            opacity: curvedAnimation,
+            child: SlideTransition(position: offsetAnimation, child: child),
+          );
+        },
+        child: KeyedSubtree(key: ValueKey(selectedTab), child: child),
+      ),
+    );
   }
 }
 
@@ -1137,7 +1199,7 @@ class _ProfileTab extends StatelessWidget {
               key: const Key('openSettingsButton'),
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(
+                  buildProposalistPageRoute<void>(
                     builder: (_) => const SettingsScreen(),
                   ),
                 );

@@ -312,6 +312,7 @@ void main() {
     await scrollTo(tester, find.byKey(const Key('generateButton')));
     await tester.tap(find.byKey(const Key('generateButton')));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 360));
 
     await expectLater(
       find.byKey(const Key('proposalistShell')),

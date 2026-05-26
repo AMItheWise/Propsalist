@@ -169,6 +169,29 @@ void main() {
     expect(find.byKey(const Key('generateButton')), findsOneWidget);
   });
 
+  testWidgets('bottom navigation animates between tabs', (tester) async {
+    setMobileViewport(tester);
+    final repository = FakeProposalRepository(
+      clarificationResult: completedClarification,
+      proposalResult: const Success(Proposal(content: 'Generated content')),
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bottomNavNewProposal')));
+    await tester.pump(const Duration(milliseconds: 80));
+
+    expect(find.byKey(const Key('proposalistTabSwitcher')), findsOneWidget);
+    expect(find.byKey(const Key('dashboardTab')), findsOneWidget);
+    expect(find.byKey(const Key('newProposalTab')), findsOneWidget);
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('dashboardTab')), findsNothing);
+    expect(find.byKey(const Key('newProposalTab')), findsOneWidget);
+  });
+
   testWidgets('generate flow shows loading then final proposal output', (
     tester,
   ) async {
@@ -226,8 +249,12 @@ void main() {
     await scrollUntilVisible(tester, find.byKey(const Key('generateButton')));
 
     await tester.tap(find.byKey(const Key('generateButton')));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(milliseconds: 360));
+    expect(find.byKey(const Key('loadingProposalState')), findsOneWidget);
+
+    for (var second = 0; second < 4; second++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
 
     expect(
       find.byKey(const Key('proposalProgressStep1Completed')),
@@ -459,6 +486,13 @@ void main() {
     expect(find.byKey(const Key('firestoreConfigHint')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('openSettingsButton')));
+    await tester.pump(const Duration(milliseconds: 80));
+
+    expect(
+      find.byKey(const Key('proposalistPageTransition'), skipOffstage: false),
+      findsOneWidget,
+    );
+
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('settingsScreen')), findsOneWidget);
