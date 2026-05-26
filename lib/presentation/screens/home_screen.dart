@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:proposal_writer/core/constants.dart';
+import 'package:proposal_writer/domain/entities/proposal_record.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 import 'package:proposal_writer/presentation/models/mock_dashboard_data.dart';
 import 'package:proposal_writer/presentation/navigation/proposalist_page_route.dart';
@@ -35,15 +36,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _projectTitleController = TextEditingController(
-      text: 'Website Redesign Proposal',
-    );
-    _clientProjectController = TextEditingController(text: 'Acme Inc.');
+    _projectTitleController = TextEditingController();
+    _clientProjectController = TextEditingController();
     _promptController = TextEditingController();
+    _projectTitleController.addListener(_handleDraftChanged);
+    _clientProjectController.addListener(_handleDraftChanged);
+    _promptController.addListener(_handleDraftChanged);
   }
 
   @override
   void dispose() {
+    _projectTitleController.removeListener(_handleDraftChanged);
+    _clientProjectController.removeListener(_handleDraftChanged);
+    _promptController.removeListener(_handleDraftChanged);
     _projectTitleController.dispose();
     _clientProjectController.dispose();
     _promptController.dispose();
@@ -117,6 +122,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildSelectedTab() {
+    final draftInput = _currentDraftInput();
     return switch (_selectedTab) {
       _HomeTab.dashboard => _DashboardTab(
         onNewProposal: () => _selectTab(_HomeTab.newProposal),
@@ -125,8 +131,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         projectTitleController: _projectTitleController,
         clientProjectController: _clientProjectController,
         promptController: _promptController,
+        draftInput: draftInput,
+        onDraftChanged: _handleDraftChanged,
         onGenerate: _generateProposal,
-        onSaveDraft: _showDraftPlaceholder,
+        onSaveDraft: _saveDraft,
       ),
       _HomeTab.clarifications => _ClarificationsTab(
         clarificationControllers: _controllersForQuestionCount(
@@ -162,6 +170,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _generateProposal() async {
     FocusScope.of(context).unfocus();
     _disposeClarificationControllers();
+    final draftInput = _currentDraftInput();
+    final saveResult = await ref
+        .read(activeDraftProvider.notifier)
+        .save(draftInput);
+    final activeProposalId = saveResult.when(
+      success: (proposalId) => proposalId,
+      failure: (_) => ref.read(activeDraftProvider).proposalId,
+    );
+    if (!mounted) {
+      return;
+    }
     _selectTab(_HomeTab.proposals);
     await ref
         .read(proposalFlowProvider.notifier)
@@ -169,6 +188,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           prompt: _promptController.text.trim(),
           tone: ref.read(toneProvider),
           maxTokens: ref.read(maxTokensProvider),
+          draftInput: draftInput,
+          activeProposalId: activeProposalId,
         );
     if (!mounted) {
       return;
@@ -196,12 +217,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  void _showDraftPlaceholder() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Draft saving is tracked in the redesign roadmap.'),
-      ),
+  Future<void> _saveDraft() async {
+    FocusScope.of(context).unfocus();
+    await ref.read(activeDraftProvider.notifier).save(_currentDraftInput());
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  ProposalDraftInput _currentDraftInput() {
+    return ProposalDraftInput(
+      title: _projectTitleController.text.trim(),
+      clientName: _clientProjectController.text.trim(),
+      brief: _promptController.text.trim(),
+      tone: ref.read(toneProvider),
+      maxTokens: ref.read(maxTokensProvider),
     );
+  }
+
+  void _handleDraftChanged() {
+    if (!mounted) {
+      return;
+    }
+    ref.read(activeDraftProvider.notifier).markDirty();
+    setState(() {});
   }
 
   List<TextEditingController> _controllersForQuestionCount(int questionCount) {
@@ -289,13 +328,15 @@ class _AnimatedHomeTabBody extends StatelessWidget {
   }
 }
 
-class _DashboardTab extends StatelessWidget {
+class _DashboardTab extends ConsumerWidget {
   const _DashboardTab({required this.onNewProposal});
 
   final VoidCallback onNewProposal;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recentProposals = ref.watch(dashboardRecentProposalsProvider);
+
     return ListView(
       key: const Key('dashboardTab'),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -348,19 +389,43 @@ class _DashboardTab extends StatelessWidget {
           action: TextButton(onPressed: () {}, child: const Text('View all')),
         ),
         const SizedBox(height: ProposalistSpacing.xs),
-        ProposalistCard(
+        _RecentProposalPreview(proposals: recentProposals),
+      ],
+    );
+  }
+}
+
+class _RecentProposalPreview extends StatelessWidget {
+  const _RecentProposalPreview({required this.proposals});
+
+  final AsyncValue<List<ProposalRecord>> proposals;
+
+  @override
+  Widget build(BuildContext context) {
+    return proposals.when(
+      data: (records) {
+        if (records.isEmpty) {
+          return const ProposalistCard(child: Text('No saved proposals yet.'));
+        }
+        return ProposalistCard(
           padding: const EdgeInsets.symmetric(
             horizontal: ProposalistSpacing.md,
             vertical: ProposalistSpacing.xs,
           ),
           child: Column(
             children: [
-              for (final proposal in mockProposals.take(5))
-                MockProposalListTile(proposal: proposal),
+              for (final proposal in records)
+                ProposalRecordListTile(proposal: proposal),
             ],
           ),
-        ),
-      ],
+        );
+      },
+      loading: () => const ProposalistCard(
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => ProposalistCard(
+        child: Text('Unable to load recent proposals: $error'),
+      ),
     );
   }
 }
@@ -404,6 +469,8 @@ class _NewProposalTab extends ConsumerWidget {
     required this.projectTitleController,
     required this.clientProjectController,
     required this.promptController,
+    required this.draftInput,
+    required this.onDraftChanged,
     required this.onGenerate,
     required this.onSaveDraft,
   });
@@ -411,8 +478,10 @@ class _NewProposalTab extends ConsumerWidget {
   final TextEditingController projectTitleController;
   final TextEditingController clientProjectController;
   final TextEditingController promptController;
+  final ProposalDraftInput draftInput;
+  final VoidCallback onDraftChanged;
   final Future<void> Function() onGenerate;
-  final VoidCallback onSaveDraft;
+  final Future<void> Function() onSaveDraft;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -420,6 +489,12 @@ class _NewProposalTab extends ConsumerWidget {
     final tone = ref.watch(toneProvider);
     final maxTokens = ref.watch(maxTokensProvider);
     final proposalState = ref.watch(proposalFlowProvider);
+    final draftState = ref.watch(activeDraftProvider);
+    final canSaveDraft =
+        draftInput.hasMeaningfulContent &&
+        !draftState.isSaving &&
+        draftState.status != DraftSaveStatus.saved &&
+        !proposalState.isLoading;
 
     return ListView(
       key: const Key('newProposalTab'),
@@ -441,6 +516,7 @@ class _NewProposalTab extends ConsumerWidget {
           key: const Key('projectTitleField'),
           controller: projectTitleController,
           textInputAction: TextInputAction.next,
+          onChanged: (_) => onDraftChanged(),
           decoration: const InputDecoration(labelText: 'Project Title'),
         ),
         const SizedBox(height: ProposalistSpacing.md),
@@ -448,6 +524,7 @@ class _NewProposalTab extends ConsumerWidget {
           key: const Key('clientProjectField'),
           controller: clientProjectController,
           textInputAction: TextInputAction.next,
+          onChanged: (_) => onDraftChanged(),
           decoration: const InputDecoration(labelText: 'Client / Project'),
         ),
         const SizedBox(height: ProposalistSpacing.md),
@@ -456,7 +533,10 @@ class _NewProposalTab extends ConsumerWidget {
           controller: promptController,
           maxLines: 4,
           maxLength: 5000,
-          onChanged: (value) => ref.read(promptProvider.notifier).state = value,
+          onChanged: (value) {
+            ref.read(promptProvider.notifier).state = value;
+            onDraftChanged();
+          },
           decoration: const InputDecoration(
             labelText: 'Project Brief',
             hintText: 'Paste the full description, RFP, or project brief.',
@@ -482,6 +562,7 @@ class _NewProposalTab extends ConsumerWidget {
                 ),
                 onSelected: (_) {
                   ref.read(toneProvider.notifier).state = option;
+                  onDraftChanged();
                 },
               ),
           ],
@@ -514,6 +595,7 @@ class _NewProposalTab extends ConsumerWidget {
           label: '$maxTokens',
           onChanged: (value) {
             ref.read(maxTokensProvider.notifier).state = value.round();
+            onDraftChanged();
           },
         ),
         Row(
@@ -538,8 +620,8 @@ class _NewProposalTab extends ConsumerWidget {
             Expanded(
               child: OutlinedButton(
                 key: const Key('saveDraftButton'),
-                onPressed: onSaveDraft,
-                child: const Text('Save Draft'),
+                onPressed: canSaveDraft ? onSaveDraft : null,
+                child: Text(draftState.isSaving ? 'Saving...' : 'Save Draft'),
               ),
             ),
             const SizedBox(width: ProposalistSpacing.sm),
@@ -555,8 +637,30 @@ class _NewProposalTab extends ConsumerWidget {
             ),
           ],
         ),
+        if (draftState.status != DraftSaveStatus.idle) ...[
+          const SizedBox(height: ProposalistSpacing.sm),
+          Text(
+            _draftStatusMessage(draftState),
+            key: const Key('draftStatusText'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: draftState.status == DraftSaveStatus.failed
+                  ? ProposalistColors.error
+                  : ProposalistColors.textSecondary,
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  String _draftStatusMessage(ActiveDraftState state) {
+    return switch (state.status) {
+      DraftSaveStatus.idle => '',
+      DraftSaveStatus.dirty => 'Unsaved changes',
+      DraftSaveStatus.saving => 'Saving draft...',
+      DraftSaveStatus.saved => 'Draft saved',
+      DraftSaveStatus.failed => state.errorMessage ?? 'Draft save failed',
+    };
   }
 }
 
@@ -736,7 +840,13 @@ class _ProposalsTab extends ConsumerWidget {
       );
     }
     if (state.proposal?.isNotEmpty ?? false) {
-      return _FinalProposalView(proposal: state.proposal!);
+      return _FinalProposalView(
+        proposal: state.proposal!,
+        title: state.pendingRequest?.draftInput.title,
+        clientName: state.pendingRequest?.draftInput.clientName,
+        proposalId: state.activeProposalId,
+        saveErrorMessage: state.saveErrorMessage,
+      );
     }
     return _ProposalHistoryView(onNewProposal: onNewProposal);
   }
@@ -749,7 +859,7 @@ class _ProposalHistoryView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final proposals = ref.watch(mockProposalCardsProvider);
+    final proposals = ref.watch(recentProposalsProvider);
 
     return ListView(
       key: const Key('proposalHistoryTab'),
@@ -798,22 +908,66 @@ class _ProposalHistoryView extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: ProposalistSpacing.md),
-        if (proposals.isEmpty)
-          _EmptyProposalView(onNewProposal: onNewProposal)
-        else
-          ProposalistCard(
-            padding: const EdgeInsets.symmetric(
-              horizontal: ProposalistSpacing.md,
-              vertical: ProposalistSpacing.xs,
-            ),
-            child: Column(
-              children: [
-                for (final proposal in proposals)
-                  MockProposalListTile(proposal: proposal),
-              ],
-            ),
-          ),
+        proposals.when(
+          data: (records) {
+            if (records.isEmpty) {
+              return _EmptyProposalView(onNewProposal: onNewProposal);
+            }
+            return ProposalistCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: ProposalistSpacing.md,
+                vertical: ProposalistSpacing.xs,
+              ),
+              child: Column(
+                children: [
+                  for (final proposal in records)
+                    ProposalRecordListTile(proposal: proposal),
+                ],
+              ),
+            );
+          },
+          loading: () => const _ProposalHistoryLoadingView(),
+          error: (error, _) => _ProposalHistoryErrorView(error: error),
+        ),
       ],
+    );
+  }
+}
+
+class _ProposalHistoryLoadingView extends StatelessWidget {
+  const _ProposalHistoryLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ProposalistCard(
+      child: Center(
+        key: Key('proposalHistoryLoading'),
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
+class _ProposalHistoryErrorView extends StatelessWidget {
+  const _ProposalHistoryErrorView({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return ProposalistCard(
+      child: Column(
+        key: const Key('proposalHistoryError'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Unable to load proposals',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ProposalistSpacing.xs),
+          Text('$error', style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
     );
   }
 }
@@ -1086,12 +1240,29 @@ class _ErrorProposalView extends StatelessWidget {
 }
 
 class _FinalProposalView extends StatelessWidget {
-  const _FinalProposalView({required this.proposal});
+  const _FinalProposalView({
+    required this.proposal,
+    required this.title,
+    required this.clientName,
+    required this.proposalId,
+    required this.saveErrorMessage,
+  });
 
   final String proposal;
+  final String? title;
+  final String? clientName;
+  final String? proposalId;
+  final String? saveErrorMessage;
 
   @override
   Widget build(BuildContext context) {
+    final resolvedTitle = (title?.trim().isNotEmpty ?? false)
+        ? title!.trim()
+        : 'Generated Proposal';
+    final resolvedClient = (clientName?.trim().isNotEmpty ?? false)
+        ? 'Prepared for ${clientName!.trim()}'
+        : 'Prepared from your saved project brief';
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: [
@@ -1134,6 +1305,14 @@ class _FinalProposalView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: ProposalistSpacing.md),
+        if (saveErrorMessage != null) ...[
+          _InfoCallout(
+            text:
+                'Proposal generated successfully, but saving failed: '
+                '$saveErrorMessage',
+          ),
+          const SizedBox(height: ProposalistSpacing.md),
+        ],
         ProposalistCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1161,14 +1340,23 @@ class _FinalProposalView extends StatelessWidget {
               ),
               const SizedBox(height: ProposalistSpacing.lg),
               Text(
-                'Website Redesign Proposal',
+                resolvedTitle,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: ProposalistSpacing.xs),
               Text(
-                'Prepared for Acme Inc.',
+                resolvedClient,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+              if (proposalId != null) ...[
+                const SizedBox(height: ProposalistSpacing.xs),
+                TextButton.icon(
+                  key: const Key('openSavedProposalPlaceholder'),
+                  onPressed: () {},
+                  icon: const Icon(Icons.folder_copy_outlined, size: 16),
+                  label: const Text('Saved proposal detail coming in Phase 04'),
+                ),
+              ],
               const SizedBox(height: ProposalistSpacing.lg),
               SelectableText(
                 proposal,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:proposal_writer/domain/entities/proposal_record.dart';
 import 'package:proposal_writer/presentation/models/mock_dashboard_data.dart';
 import 'package:proposal_writer/presentation/theme/proposalist_theme.dart';
 
@@ -216,6 +217,111 @@ class MockProposalListTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class ProposalRecordListTile extends StatelessWidget {
+  const ProposalRecordListTile({required this.proposal, super.key});
+
+  final ProposalRecord proposal;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: Key('proposalRecordTile${proposal.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: ProposalistColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(ProposalistRadius.sm),
+            ),
+            child: Center(
+              child: Text(
+                _leadingLetter(proposal.title),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: ProposalistColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: ProposalistSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  proposal.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: ProposalistColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  proposal.clientName.isEmpty
+                      ? 'No client saved'
+                      : proposal.clientName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: ProposalistSpacing.xs),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              StatusBadge(
+                label: proposal.status.label,
+                color: _statusColor(proposal.status),
+                compact: true,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _updatedLabel(proposal.updatedAt ?? proposal.createdAt),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(width: ProposalistSpacing.xs),
+          const Icon(
+            Icons.more_horiz,
+            color: ProposalistColors.textSecondary,
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _leadingLetter(String title) {
+    final trimmed = title.trim();
+    return trimmed.isEmpty ? 'P' : trimmed.characters.first.toUpperCase();
+  }
+
+  Color _statusColor(ProposalStatus status) {
+    return switch (status) {
+      ProposalStatus.draft => ProposalistColors.textSecondary,
+      ProposalStatus.needsClarification => ProposalistColors.warning,
+      ProposalStatus.generated => ProposalistColors.success,
+      ProposalStatus.archived => ProposalistColors.textSecondary,
+    };
+  }
+
+  String _updatedLabel(DateTime? dateTime) {
+    if (dateTime == null) {
+      return 'Not saved';
+    }
+    return '${dateTime.month}/${dateTime.day}/${dateTime.year}';
   }
 }
 

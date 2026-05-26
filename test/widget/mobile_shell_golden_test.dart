@@ -7,13 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:proposal_writer/core/di/providers.dart';
 import 'package:proposal_writer/core/failures.dart';
 import 'package:proposal_writer/core/result.dart';
+import 'package:proposal_writer/data/proposal_store_repository_impl.dart';
 import 'package:proposal_writer/data/user_profile_repository_impl.dart';
 import 'package:proposal_writer/domain/entities/clarification_response.dart';
 import 'package:proposal_writer/domain/entities/proposal.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 import 'package:proposal_writer/domain/repositories/proposal_repository.dart';
 import 'package:proposal_writer/presentation/screens/home_screen.dart';
-import 'package:proposal_writer/presentation/state/home_providers.dart';
 import 'package:proposal_writer/presentation/theme/proposalist_theme.dart';
 
 class GoldenProposalRepository implements ProposalRepository {
@@ -60,6 +60,9 @@ Widget buildGoldenApp(
       proposalRepositoryProvider.overrideWithValue(repository),
       userProfileRepositoryProvider.overrideWithValue(
         const DisabledUserProfileRepository(),
+      ),
+      proposalStoreRepositoryProvider.overrideWithValue(
+        InMemoryProposalStoreRepository(seedRecords: mockProposalStoreRecords),
       ),
       ...overrides,
     ],
@@ -328,7 +331,11 @@ void main() {
         clarificationResult: completedClarification,
         proposalResult: generatedProposal,
       ),
-      overrides: [mockProposalCardsProvider.overrideWithValue(const [])],
+      overrides: [
+        proposalStoreRepositoryProvider.overrideWithValue(
+          InMemoryProposalStoreRepository(),
+        ),
+      ],
     );
     await tester.tap(find.byKey(const Key('bottomNavProposals')));
     await tester.pumpAndSettle();

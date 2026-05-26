@@ -10,11 +10,13 @@ import 'package:proposal_writer/data/auth_repository_impl.dart';
 import 'package:proposal_writer/data/openai_client.dart';
 import 'package:proposal_writer/data/openai_mock_client.dart';
 import 'package:proposal_writer/data/proposal_repository_impl.dart';
+import 'package:proposal_writer/data/proposal_store_repository_impl.dart';
 import 'package:proposal_writer/data/user_data_path_resolver.dart';
 import 'package:proposal_writer/data/user_profile_repository_impl.dart';
 import 'package:proposal_writer/domain/entities/app_user.dart';
 import 'package:proposal_writer/domain/repositories/auth_repository.dart';
 import 'package:proposal_writer/domain/repositories/proposal_repository.dart';
+import 'package:proposal_writer/domain/repositories/proposal_store_repository.dart';
 import 'package:proposal_writer/domain/repositories/user_profile_repository.dart';
 import 'package:proposal_writer/domain/usecases/proposal_flow_usecase.dart';
 import 'package:proposal_writer/domain/usecases/user_profile_usecase.dart';
@@ -62,6 +64,23 @@ final proposalFlowUseCaseProvider = Provider<ProposalFlowUseCase>((ref) {
 
 final userDataPathResolverProvider = Provider<UserDataPathResolver>((ref) {
   return const UserDataPathResolver();
+});
+
+final proposalStoreRepositoryProvider = Provider<ProposalStoreRepository>((
+  ref,
+) {
+  final config = ref.watch(envConfigProvider);
+  if (!config.isFirebaseConfigured) {
+    return config.mockApi
+        ? InMemoryProposalStoreRepository(seedRecords: mockProposalStoreRecords)
+        : const DisabledProposalStoreRepository();
+  }
+
+  return FirestoreProposalStoreRepository(
+    firestore: FirebaseFirestore.instance,
+    authRepository: ref.watch(authRepositoryProvider),
+    pathResolver: ref.watch(userDataPathResolverProvider),
+  );
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

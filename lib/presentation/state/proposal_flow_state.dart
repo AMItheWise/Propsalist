@@ -1,3 +1,4 @@
+import 'package:proposal_writer/domain/entities/proposal_record.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 
 const _notSet = Object();
@@ -17,12 +18,14 @@ class ProposalRequest {
     required this.tone,
     required this.maxTokens,
     required this.userProfileContext,
+    required this.draftInput,
   });
 
   final String prompt;
   final ProposalTone tone;
   final int maxTokens;
   final String? userProfileContext;
+  final ProposalDraftInput draftInput;
 }
 
 class ProposalFlowState {
@@ -37,6 +40,8 @@ class ProposalFlowState {
     required this.pendingRequest,
     required this.generationPromptOverride,
     required this.clarificationAnswers,
+    required this.activeProposalId,
+    required this.saveErrorMessage,
   });
 
   factory ProposalFlowState.initial() => const ProposalFlowState(
@@ -50,6 +55,8 @@ class ProposalFlowState {
     pendingRequest: null,
     generationPromptOverride: null,
     clarificationAnswers: null,
+    activeProposalId: null,
+    saveErrorMessage: null,
   );
 
   final ProposalFlowStage stage;
@@ -62,6 +69,8 @@ class ProposalFlowState {
   final ProposalRequest? pendingRequest;
   final String? generationPromptOverride;
   final String? clarificationAnswers;
+  final String? activeProposalId;
+  final String? saveErrorMessage;
 
   ProposalFlowState copyWith({
     ProposalFlowStage? stage,
@@ -74,6 +83,8 @@ class ProposalFlowState {
     Object? pendingRequest = _notSet,
     Object? generationPromptOverride = _notSet,
     Object? clarificationAnswers = _notSet,
+    Object? activeProposalId = _notSet,
+    Object? saveErrorMessage = _notSet,
   }) {
     return ProposalFlowState(
       stage: stage ?? this.stage,
@@ -95,6 +106,12 @@ class ProposalFlowState {
       clarificationAnswers: clarificationAnswers == _notSet
           ? this.clarificationAnswers
           : clarificationAnswers as String?,
+      activeProposalId: activeProposalId == _notSet
+          ? this.activeProposalId
+          : activeProposalId as String?,
+      saveErrorMessage: saveErrorMessage == _notSet
+          ? this.saveErrorMessage
+          : saveErrorMessage as String?,
     );
   }
 }

@@ -9,9 +9,11 @@ import 'package:proposal_writer/core/result.dart';
 import 'package:proposal_writer/data/user_profile_repository_impl.dart';
 import 'package:proposal_writer/domain/entities/clarification_response.dart';
 import 'package:proposal_writer/domain/entities/proposal.dart';
+import 'package:proposal_writer/domain/entities/proposal_record.dart';
 import 'package:proposal_writer/domain/entities/proposal_tone.dart';
 import 'package:proposal_writer/domain/entities/user_profile.dart';
 import 'package:proposal_writer/domain/repositories/proposal_repository.dart';
+import 'package:proposal_writer/domain/repositories/proposal_store_repository.dart';
 import 'package:proposal_writer/domain/repositories/user_profile_repository.dart';
 import 'package:proposal_writer/presentation/screens/home_screen.dart';
 import 'package:proposal_writer/presentation/theme/proposalist_theme.dart';
@@ -80,15 +82,85 @@ class FakeUserProfileRepository implements UserProfileRepository {
   }
 }
 
+class FakeProposalStoreRepository implements ProposalStoreRepository {
+  FakeProposalStoreRepository({
+    this.records = const [],
+    this.recentStream,
+    this.draftId = 'draft-1',
+  });
+
+  final List<ProposalRecord> records;
+  final Stream<List<ProposalRecord>>? recentStream;
+  final String draftId;
+  int createDraftCount = 0;
+  int updateDraftCount = 0;
+  ProposalDraftInput? lastDraftInput;
+  final generatedInputs = <GeneratedProposalInput>[];
+  final clarificationInputs = <ClarificationProposalInput>[];
+
+  @override
+  Stream<List<ProposalRecord>> watchRecentProposals({int limit = 20}) {
+    final stream = recentStream;
+    if (stream != null) {
+      return stream;
+    }
+    return Stream<List<ProposalRecord>>.value(records.take(limit).toList());
+  }
+
+  @override
+  Future<Result<ProposalRecord?>> getProposal(String id) async {
+    return Success(records.where((record) => record.id == id).firstOrNull);
+  }
+
+  @override
+  Future<Result<String>> createDraft(ProposalDraftInput input) async {
+    createDraftCount += 1;
+    lastDraftInput = input;
+    return Success(draftId);
+  }
+
+  @override
+  Future<Result<void>> updateDraft(String id, ProposalDraftInput input) async {
+    updateDraftCount += 1;
+    lastDraftInput = input;
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> saveGeneratedProposal(
+    GeneratedProposalInput input,
+  ) async {
+    generatedInputs.add(input);
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> markNeedsClarification(
+    ClarificationProposalInput input,
+  ) async {
+    clarificationInputs.add(input);
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> archiveProposal(String id) async {
+    return const Success(null);
+  }
+}
+
 Widget buildTestApp(
   ProposalRepository repository, {
   UserProfileRepository userProfileRepository =
       const DisabledUserProfileRepository(),
+  ProposalStoreRepository? proposalStoreRepository,
 }) {
   return ProviderScope(
     overrides: [
       proposalRepositoryProvider.overrideWithValue(repository),
       userProfileRepositoryProvider.overrideWithValue(userProfileRepository),
+      proposalStoreRepositoryProvider.overrideWithValue(
+        proposalStoreRepository ?? FakeProposalStoreRepository(),
+      ),
     ],
     child: MaterialApp(
       theme: buildProposalistTheme(),
@@ -111,6 +183,33 @@ void setMobileViewport(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+ProposalRecord proposalRecord({
+  String id = 'proposal-1',
+  String title = 'Stored Proposal',
+  String clientName = 'Stored Client',
+  ProposalStatus status = ProposalStatus.generated,
+}) {
+  return ProposalRecord(
+    id: id,
+    ownerId: 'user-123',
+    title: title,
+    clientName: clientName,
+    brief: 'Stored brief',
+    tone: ProposalTone.direct,
+    maxTokens: 1200,
+    status: status,
+    tags: const [],
+    promptSummary: 'Stored summary',
+    clarificationQuestions: const [],
+    clarificationAnswers: null,
+    proposalContent: 'Stored content',
+    createdAt: DateTime.utc(2026, 5, 20),
+    updatedAt: DateTime.utc(2026, 5, 26),
+    generatedAt: DateTime.utc(2026, 5, 26),
+    lastOpenedAt: null,
+  );
 }
 
 void main() {
@@ -167,6 +266,203 @@ void main() {
     expect(find.byKey(const Key('maxTokensSlider')), findsOneWidget);
     expect(find.byKey(const Key('saveDraftButton')), findsOneWidget);
     expect(find.byKey(const Key('generateButton')), findsOneWidget);
+  });
+
+  testWidgets('save draft button is disabled for an empty form', (
+    tester,
+  ) async {
+    setMobileViewport(tester);
+    final repository = FakeProposalRepository(
+      clarificationResult: completedClarification,
+      proposalResult: const Success(Proposal(content: 'Generated content')),
+    );
+
+    await tester.pumpWidget(buildTestApp(repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bottomNavNewProposal')));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<OutlinedButton>(
+      find.byKey(const Key('saveDraftButton')),
+    );
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('save draft creates a persisted draft', (tester) async {
+    setMobileViewport(tester);
+    final repository = FakeProposalRepository(
+      clarificationResult: completedClarification,
+      proposalResult: const Success(Proposal(content: 'Generated content')),
+    );
+    final proposalStoreRepository = FakeProposalStoreRepository();
+
+    await tester.pumpWidget(
+      buildTestApp(
+        repository,
+        proposalStoreRepository: proposalStoreRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bottomNavNewProposal')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('projectTitleField')),
+      'Website Redesign',
+    );
+    await tester.enterText(
+      find.byKey(const Key('clientProjectField')),
+      'Acme Inc.',
+    );
+    await tester.enterText(
+      find.byKey(const Key('promptField')),
+      'Redesign the marketing website.',
+    );
+    await scrollUntilVisible(tester, find.byKey(const Key('saveDraftButton')));
+    await tester.tap(find.byKey(const Key('saveDraftButton')));
+    await tester.pumpAndSettle();
+
+    expect(proposalStoreRepository.createDraftCount, 1);
+    expect(proposalStoreRepository.lastDraftInput?.title, 'Website Redesign');
+    expect(proposalStoreRepository.lastDraftInput?.clientName, 'Acme Inc.');
+    expect(
+      proposalStoreRepository.lastDraftInput?.brief,
+      'Redesign the marketing website.',
+    );
+    expect(find.text('Draft saved'), findsOneWidget);
+  });
+
+  testWidgets('generation saves draft first and persists generated proposal', (
+    tester,
+  ) async {
+    setMobileViewport(tester);
+    final repository = FakeProposalRepository(
+      clarificationResult: completedClarification,
+      proposalResult: const Success(Proposal(content: 'Generated content')),
+    );
+    final proposalStoreRepository = FakeProposalStoreRepository();
+
+    await tester.pumpWidget(
+      buildTestApp(
+        repository,
+        proposalStoreRepository: proposalStoreRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bottomNavNewProposal')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('projectTitleField')),
+      'Website Redesign',
+    );
+    await tester.enterText(
+      find.byKey(const Key('clientProjectField')),
+      'Acme Inc.',
+    );
+    await tester.enterText(find.byKey(const Key('promptField')), 'Proposal');
+    await scrollUntilVisible(tester, find.byKey(const Key('generateButton')));
+    await tester.tap(find.byKey(const Key('generateButton')));
+    await tester.pumpAndSettle();
+
+    expect(proposalStoreRepository.createDraftCount, 1);
+    expect(proposalStoreRepository.generatedInputs, hasLength(1));
+    expect(
+      proposalStoreRepository.generatedInputs.single.proposalId,
+      'draft-1',
+    );
+    expect(
+      proposalStoreRepository.generatedInputs.single.proposalContent,
+      'Generated content',
+    );
+    expect(find.byKey(const Key('proposalOutput')), findsOneWidget);
+  });
+
+  testWidgets('proposals tab shows repository data', (tester) async {
+    setMobileViewport(tester);
+    final repository = FakeProposalRepository(
+      clarificationResult: completedClarification,
+      proposalResult: const Success(Proposal(content: 'Generated content')),
+    );
+    final proposalStoreRepository = FakeProposalStoreRepository(
+      records: [
+        proposalRecord(
+          title: 'Repository Backed Proposal',
+          clientName: 'Bright Labs',
+          status: ProposalStatus.draft,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      buildTestApp(
+        repository,
+        proposalStoreRepository: proposalStoreRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bottomNavProposals')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Repository Backed Proposal'), findsOneWidget);
+    expect(find.text('Bright Labs'), findsOneWidget);
+    expect(
+      find.byKey(const Key('proposalRecordTileproposal-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Draft'), findsWidgets);
+  });
+
+  testWidgets('proposals tab shows empty, loading, and error states', (
+    tester,
+  ) async {
+    setMobileViewport(tester);
+    final repository = FakeProposalRepository(
+      clarificationResult: completedClarification,
+      proposalResult: const Success(Proposal(content: 'Generated content')),
+    );
+
+    await tester.pumpWidget(
+      buildTestApp(
+        repository,
+        proposalStoreRepository: FakeProposalStoreRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bottomNavProposals')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('emptyProposalState')), findsOneWidget);
+
+    final loadingController = StreamController<List<ProposalRecord>>();
+    addTearDown(loadingController.close);
+    await tester.pumpWidget(
+      buildTestApp(
+        repository,
+        proposalStoreRepository: FakeProposalStoreRepository(
+          recentStream: loadingController.stream,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('bottomNavProposals')));
+    await tester.pump(const Duration(milliseconds: 360));
+    expect(find.byKey(const Key('proposalHistoryLoading')), findsOneWidget);
+
+    await tester.pumpWidget(
+      buildTestApp(
+        repository,
+        proposalStoreRepository: FakeProposalStoreRepository(
+          recentStream: Stream<List<ProposalRecord>>.error(
+            Exception('store failed'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bottomNavProposals')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('proposalHistoryError')), findsOneWidget);
+    expect(find.textContaining('store failed'), findsOneWidget);
   });
 
   testWidgets('bottom navigation animates between tabs', (tester) async {
