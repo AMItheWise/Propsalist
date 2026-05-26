@@ -52,6 +52,8 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       proposal: null,
       errorMessage: null,
       pendingRequest: request,
+      generationPromptOverride: null,
+      clarificationAnswers: null,
     );
     final useCase = _ref.read(proposalFlowUseCaseProvider);
     final result = await useCase.requestClarifications(
@@ -99,42 +101,11 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       isLoading: true,
       errorMessage: null,
     );
-    final clarifiedPrompt = StringBuffer()
-      ..writeln('User request: ${request.prompt}')
-      ..writeln('Clarification answers: $answers');
-    final useCase = _ref.read(proposalFlowUseCaseProvider);
-    final result = await useCase.requestClarifications(
-      prompt: clarifiedPrompt.toString(),
-      userProfileContext: request.userProfileContext,
-    );
-    await result.when(
-      success: (clarification) async {
-        if (clarification.hasQuestions) {
-          state = state.copyWith(
-            stage: ProposalFlowStage.awaitingClarifications,
-            isLoading: false,
-            awaitingClarifications: true,
-            questions: clarification.questions,
-            summary: clarification.summary,
-            errorMessage: null,
-          );
-          return;
-        }
-        await _generateProposal(
-          request: request,
-          summary: clarification.summary,
-          clarificationAnswers: answers,
-          promptOverride: clarification.improvedPrompt,
-        );
-      },
-      failure: (failure) async {
-        state = state.copyWith(
-          stage: ProposalFlowStage.failure,
-          isLoading: false,
-          awaitingClarifications: false,
-          errorMessage: failure.message,
-        );
-      },
+
+    await _generateProposal(
+      request: request,
+      summary: summary,
+      clarificationAnswers: answers,
     );
   }
 
@@ -149,6 +120,9 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
       isLoading: true,
       awaitingClarifications: false,
       errorMessage: null,
+      summary: summary,
+      generationPromptOverride: promptOverride,
+      clarificationAnswers: clarificationAnswers,
     );
     final useCase = _ref.read(proposalFlowUseCaseProvider);
     final result = await useCase.generateProposal(
@@ -173,6 +147,21 @@ class ProposalFlowNotifier extends StateNotifier<ProposalFlowState> {
         awaitingClarifications: false,
         errorMessage: failure.message,
       ),
+    );
+  }
+
+  Future<void> retryGeneration() async {
+    final request = state.pendingRequest;
+    final summary = state.summary;
+    if (request == null || summary == null) {
+      return;
+    }
+
+    await _generateProposal(
+      request: request,
+      summary: summary,
+      clarificationAnswers: state.clarificationAnswers,
+      promptOverride: state.generationPromptOverride,
     );
   }
 }

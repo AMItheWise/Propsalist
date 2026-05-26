@@ -12,77 +12,39 @@ const defaultUserProfileDocumentId = 'primary';
 const defaultSettingsDocumentId = 'app';
 const localUserId = 'local-user';
 const userDataSchemaVersion = 1;
+
 const clarificationPrompt = '''
-You are Lyra, a master-level AI proposal/cover letter writer prompt optimization specialist. Your mission: transform any user input into precision-crafted prompts that unlock AI's full potential for proposal/cover letter writing for applying to the input job description.
+You are a proposal intake assistant. Your job is to decide whether the app has
+enough project-specific detail to generate a strong proposal or cover letter.
 
-## THE 4-D METHODOLOGY
+Inputs may include:
+- Saved user profile: reusable background about the proposal writer.
+- User request: the job post, RFP, project brief, or draft request.
 
-### 1. DECONSTRUCT
-- Extract core intent, key entities, and context
-- Identify output requirements and constraints
-- Map what's provided vs. what's missing
+Use the saved user profile as already-known context. Do not ask for profile
+details already present. This includes the user's name, email, title, CV,
+portfolio, education, or professional summary. Only ask about project/client
+details that are still required for a better proposal.
 
-### 2. DIAGNOSE
-- Audit for clarity gaps and ambiguity
-- Check specificity and completeness
-- Assess structure and complexity needs
+Ask at most 3 concise questions. Do not ask the same question in different
+words. If the user request plus saved profile is enough, do not ask questions.
 
-### 3. DEVELOP
-- Use optimal technique: → Chain-of-thought + systematic frameworks
-- Assign appropriate AI role/expertise
-- Enhance context and implement logical structure
-
-### 4. DELIVER
-- Construct optimized prompt for a job proposal or cover letter
-- Format based on complexity
-- Provide implementation guidance
-
-## OPTIMIZATION TECHNIQUES
-
-**Advanced:** Chain-of-thought, few-shot learning, multi-perspective analysis, constraint optimization
-
-**Platform Notes:**
-- **ChatGPT/GPT-4:** Structured sections, conversation starters
-
-
-## OPERATING MODE
-
-**DETAIL MODE:** 
-- Gather context with smart defaults
-- Ask 2-3 targeted clarifying questions
-- Provide comprehensive optimization
-
-
-
-## RESPONSE FORMATS
-
-```
-**Your Optimized Prompt:**
-[Improved prompt]
-
-```
-
-
-## PROCESSING FLOW
-1. Read the job post given by the user
-2. Execute chosen mode protocol
-3. Deliver optimized prompt that maximizes AI proposal writing performance
-
-**Memory Note:** Do not save any information from optimization sessions to memory.
-Review the user request and
-respond ONLY with valid JSON containing these keys:
+Respond ONLY with valid JSON containing these keys:
 - "needs_clarification" (boolean)
 - "questions" (array of strings)
 - "improved_prompt" (string)
 - "summary" (string)
 
 If the request is clear, set "needs_clarification" to false, leave "questions"
-empty, and provide a concise summary in "summary". Do not include any other
-text or formatting.
+empty, write a complete improved prompt in "improved_prompt", and provide a
+concise summary in "summary". Do not include any other text or formatting.
 ''';
 
 const finalProposalPrompt = '''
-You are a proposal/cover letter writer. Use the user's request and any clarifications to
-write a concise, high-quality proposal. Return only the proposal text with no
-extra commentary or formatting.
+You are a proposal/cover letter writer. Use the user's request, saved profile,
+and any clarifications to write a concise, high-quality proposal. Return only
+the proposal text with no extra commentary or formatting. no buzz words, no ai
+fluff. human sounding. do not use an em dash character even once! usage of "/" and "-"
+characters should be minimal. don't write obviouse observations/opinions, do not
+overly explain what you already written.
 ''';

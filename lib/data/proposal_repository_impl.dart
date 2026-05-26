@@ -214,9 +214,36 @@ class ProposalRepositoryImpl implements ProposalRepository {
   }
 
   String _describeDioError(DioException error) {
+    final transportMessage = switch (error.type) {
+      DioExceptionType.connectionTimeout =>
+        'Timed out while connecting to the OpenAI API. Check the '
+            'emulator or device internet connection and try again.',
+      DioExceptionType.sendTimeout =>
+        'Timed out while sending the request to the OpenAI API. Check '
+            'the network connection and try again.',
+      DioExceptionType.receiveTimeout =>
+        'The OpenAI request timed out while waiting for a response. '
+            'Try again, or reduce the max token setting for a faster response.',
+      DioExceptionType.connectionError =>
+        'The network connection to the OpenAI API failed. Check the '
+            'emulator or device internet connection and try again.',
+      DioExceptionType.cancel => 'The OpenAI request was cancelled.',
+      DioExceptionType.badCertificate =>
+        'The OpenAI API TLS certificate could not be verified.',
+      DioExceptionType.unknown => null,
+      DioExceptionType.badResponse => null,
+    };
+    if (transportMessage != null) {
+      return transportMessage;
+    }
+
     final response = error.response;
     if (response == null) {
-      return 'Failed to reach the OpenAI API.';
+      final detail = error.message;
+      if (detail == null || detail.trim().isEmpty) {
+        return 'Failed to reach the OpenAI API.';
+      }
+      return 'Failed to reach the OpenAI API: $detail';
     }
 
     final status = response.statusCode;

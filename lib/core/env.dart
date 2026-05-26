@@ -45,6 +45,16 @@ class EnvConfig {
   final FirebaseOptions? firebaseOptions;
 
   bool get isFirebaseConfigured => firebaseOptions != null;
+
+  EnvConfig withoutFirebase() {
+    return EnvConfig(
+      apiKey: apiKey,
+      model: model,
+      baseUrl: baseUrl,
+      mockApi: mockApi,
+      firebaseOptions: null,
+    );
+  }
 }
 
 const _firebaseApiKeyDefine = String.fromEnvironment('FIREBASE_API_KEY');

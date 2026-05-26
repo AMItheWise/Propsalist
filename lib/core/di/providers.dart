@@ -19,8 +19,12 @@ import 'package:proposal_writer/domain/repositories/user_profile_repository.dart
 import 'package:proposal_writer/domain/usecases/proposal_flow_usecase.dart';
 import 'package:proposal_writer/domain/usecases/user_profile_usecase.dart';
 
-final envConfigProvider = Provider<EnvConfig>((ref) {
+final envConfigStateProvider = StateProvider<EnvConfig>((ref) {
   return EnvConfig.fromEnvironment(dotenv: _safeDotenvValues());
+});
+
+final envConfigProvider = Provider<EnvConfig>((ref) {
+  return ref.watch(envConfigStateProvider);
 });
 
 final dioProvider = Provider<Dio>((ref) {
@@ -29,7 +33,8 @@ final dioProvider = Provider<Dio>((ref) {
     BaseOptions(
       baseUrl: config.baseUrl.toString(),
       connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 120),
+      receiveTimeout: const Duration(minutes: 5),
+      sendTimeout: const Duration(seconds: 30),
     ),
   );
 });

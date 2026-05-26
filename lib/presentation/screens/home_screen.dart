@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,7 +26,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final TextEditingController _projectTitleController;
   late final TextEditingController _clientProjectController;
   late final TextEditingController _promptController;
-  late final TextEditingController _clarificationController;
+  final List<TextEditingController> _clarificationControllers = [];
 
   _HomeTab _selectedTab = _HomeTab.dashboard;
 
@@ -36,7 +38,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     _clientProjectController = TextEditingController(text: 'Acme Inc.');
     _promptController = TextEditingController();
-    _clarificationController = TextEditingController();
   }
 
   @override
@@ -44,7 +45,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _projectTitleController.dispose();
     _clientProjectController.dispose();
     _promptController.dispose();
-    _clarificationController.dispose();
+    _disposeClarificationControllers();
     super.dispose();
   }
 
@@ -126,7 +127,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onSaveDraft: _showDraftPlaceholder,
       ),
       _HomeTab.clarifications => _ClarificationsTab(
-        clarificationController: _clarificationController,
+        clarificationControllers: _controllersForQuestionCount(
+          ref.watch(
+            proposalFlowProvider.select((state) => state.questions.length),
+          ),
+        ),
         onContinue: _submitClarifications,
       ),
       _HomeTab.proposals => _ProposalsTab(
@@ -140,7 +145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _generateProposal() async {
     FocusScope.of(context).unfocus();
-    _clarificationController.clear();
+    _disposeClarificationControllers();
     setState(() {
       _selectedTab = _HomeTab.proposals;
     });
@@ -164,12 +169,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _submitClarifications() async {
     FocusScope.of(context).unfocus();
+    final questions = ref.read(proposalFlowProvider).questions;
+    final answers = _formatClarificationAnswers(questions);
     setState(() {
       _selectedTab = _HomeTab.proposals;
     });
-    await ref
-        .read(proposalFlowProvider.notifier)
-        .submitClarifications(_clarificationController.text.trim());
+    await ref.read(proposalFlowProvider.notifier).submitClarifications(answers);
     if (!mounted) {
       return;
     }
@@ -187,6 +192,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         content: Text('Draft saving is tracked in the redesign roadmap.'),
       ),
     );
+  }
+
+  List<TextEditingController> _controllersForQuestionCount(int questionCount) {
+    while (_clarificationControllers.length < questionCount) {
+      _clarificationControllers.add(TextEditingController());
+    }
+    while (_clarificationControllers.length > questionCount) {
+      _clarificationControllers.removeLast().dispose();
+    }
+    return List<TextEditingController>.unmodifiable(_clarificationControllers);
+  }
+
+  String _formatClarificationAnswers(List<String> questions) {
+    final answers = <String>[];
+    for (var index = 0; index < questions.length; index++) {
+      final answer = _clarificationControllers[index].text.trim();
+      if (answer.isEmpty) {
+        continue;
+      }
+      answers.add(
+        'Q${index + 1}: ${questions[index]}\n'
+        'A${index + 1}: $answer',
+      );
+    }
+    return answers.join('\n\n');
+  }
+
+  void _disposeClarificationControllers() {
+    for (final controller in _clarificationControllers) {
+      controller.dispose();
+    }
+    _clarificationControllers.clear();
   }
 }
 
@@ -463,11 +500,11 @@ class _NewProposalTab extends ConsumerWidget {
 
 class _ClarificationsTab extends ConsumerStatefulWidget {
   const _ClarificationsTab({
-    required this.clarificationController,
+    required this.clarificationControllers,
     required this.onContinue,
   });
 
-  final TextEditingController clarificationController;
+  final List<TextEditingController> clarificationControllers;
   final Future<void> Function() onContinue;
 
   @override
@@ -478,6 +515,12 @@ class _ClarificationsTabState extends ConsumerState<_ClarificationsTab> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(proposalFlowProvider);
+    final allQuestionsAnswered =
+        state.questions.isNotEmpty &&
+        widget.clarificationControllers.length >= state.questions.length &&
+        widget.clarificationControllers
+            .take(state.questions.length)
+            .every((controller) => controller.text.trim().isNotEmpty);
 
     return ListView(
       key: const Key('clarificationsTab'),
@@ -521,31 +564,18 @@ class _ClarificationsTabState extends ConsumerState<_ClarificationsTab> {
         const SizedBox(height: ProposalistSpacing.xs),
         for (var index = 0; index < state.questions.length; index++)
           Padding(
-            padding: const EdgeInsets.only(bottom: ProposalistSpacing.xs),
-            child: _QuestionRow(
-              index: index + 1,
+            padding: const EdgeInsets.only(bottom: ProposalistSpacing.sm),
+            child: _ClarificationQuestionField(
+              index: index,
               question: state.questions[index],
+              controller: widget.clarificationControllers[index],
+              onChanged: () => setState(() {}),
             ),
           ),
         const SizedBox(height: ProposalistSpacing.md),
-        Text('Your Answer', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: ProposalistSpacing.xs),
-        TextField(
-          key: const Key('clarificationField'),
-          controller: widget.clarificationController,
-          maxLines: 8,
-          maxLength: 2000,
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            hintText: 'Provide as much detail as possible.',
-          ),
-        ),
-        const SizedBox(height: ProposalistSpacing.md),
         FilledButton.icon(
           key: const Key('submitClarificationsButton'),
-          onPressed:
-              widget.clarificationController.text.trim().isEmpty ||
-                  state.isLoading
+          onPressed: !allQuestionsAnswered || state.isLoading
               ? null
               : widget.onContinue,
           icon: const Icon(Icons.arrow_forward, size: 18),
@@ -556,11 +586,18 @@ class _ClarificationsTabState extends ConsumerState<_ClarificationsTab> {
   }
 }
 
-class _QuestionRow extends StatelessWidget {
-  const _QuestionRow({required this.index, required this.question});
+class _ClarificationQuestionField extends StatelessWidget {
+  const _ClarificationQuestionField({
+    required this.index,
+    required this.question,
+    required this.controller,
+    required this.onChanged,
+  });
 
   final int index;
   final String question;
+  final TextEditingController controller;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -572,19 +609,42 @@ class _QuestionRow extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE0E7FF)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 13,
-            backgroundColor: ProposalistColors.surfaceAlt,
-            child: Text(
-              '$index',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: ProposalistColors.primary,
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: CircleAvatar(
+              radius: 13,
+              backgroundColor: ProposalistColors.surfaceAlt,
+              child: Text(
+                '${index + 1}',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: ProposalistColors.primary,
+                ),
               ),
             ),
           ),
           const SizedBox(width: ProposalistSpacing.sm),
-          Expanded(child: Text(question)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(question),
+                const SizedBox(height: ProposalistSpacing.sm),
+                TextField(
+                  key: Key('clarificationAnswerField$index'),
+                  controller: controller,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 900,
+                  onChanged: (_) => onChanged(),
+                  decoration: InputDecoration(
+                    hintText: 'Answer question ${index + 1}',
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -607,7 +667,11 @@ class _ProposalsTab extends ConsumerWidget {
       return const _GeneratingProposalView();
     }
     if (state.errorMessage != null) {
-      return _ErrorProposalView(message: state.errorMessage!);
+      return _ErrorProposalView(
+        message: state.errorMessage!,
+        onRetry: () =>
+            ref.read(proposalFlowProvider.notifier).retryGeneration(),
+      );
     }
     if (state.proposal?.isNotEmpty ?? false) {
       return _FinalProposalView(proposal: state.proposal!);
@@ -740,28 +804,98 @@ class _EmptyProposalView extends StatelessWidget {
   }
 }
 
-class _GeneratingProposalView extends StatelessWidget {
+class _GeneratingProposalView extends StatefulWidget {
   const _GeneratingProposalView();
 
   @override
+  State<_GeneratingProposalView> createState() =>
+      _GeneratingProposalViewState();
+}
+
+class _GeneratingProposalViewState extends State<_GeneratingProposalView> {
+  static const _steps = [
+    _ProgressStep('Analyzing your inputs', Icons.manage_search),
+    _ProgressStep('Reading saved profile context', Icons.badge_outlined),
+    _ProgressStep('Crafting proposal content', Icons.edit_document),
+    _ProgressStep('Formatting and polishing', Icons.auto_awesome),
+  ];
+
+  Timer? _timer;
+  int _activeStep = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || _activeStep >= _steps.length - 1) {
+        return;
+      }
+      setState(() {
+        _activeStep += 1;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final progressValue = switch (_activeStep) {
+      0 => 0.28,
+      1 => 0.52,
+      2 => 0.76,
+      _ => 0.92,
+    };
+    final activeLabel = _steps[_activeStep].label;
+
     return ListView(
       key: const Key('loadingProposalState'),
       padding: const EdgeInsets.fromLTRB(20, 48, 20, 24),
       children: [
         const SizedBox(height: ProposalistSpacing.xxl),
         Center(
-          child: Container(
-            width: 108,
-            height: 108,
-            decoration: const BoxDecoration(
-              color: ProposalistColors.surfaceAlt,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: ProposalistColors.primary,
-              size: 46,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: progressValue),
+            duration: const Duration(milliseconds: 520),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox.square(
+                    dimension: 112,
+                    child: CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 6,
+                      backgroundColor: ProposalistColors.surfaceAlt,
+                    ),
+                  ),
+                  child!,
+                ],
+              );
+            },
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: Container(
+                key: ValueKey(_activeStep),
+                width: 86,
+                height: 86,
+                decoration: const BoxDecoration(
+                  color: ProposalistColors.surfaceAlt,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _steps[_activeStep].icon,
+                  color: ProposalistColors.primary,
+                  size: 42,
+                ),
+              ),
             ),
           ),
         ),
@@ -777,19 +911,34 @@ class _GeneratingProposalView extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(height: ProposalistSpacing.lg),
-        const LinearProgressIndicator(value: 0.46),
-        const SizedBox(height: ProposalistSpacing.lg),
-        const _ChecklistItem(label: 'Analyzing your inputs', checked: true),
-        const _ChecklistItem(
-          label: 'Crafting proposal content',
-          checked: false,
+        const SizedBox(height: ProposalistSpacing.xs),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: Text(
+            activeLabel,
+            key: ValueKey(activeLabel),
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: ProposalistColors.primary),
+          ),
         ),
-        const _ChecklistItem(
-          label: 'Applying brand voice & tone',
-          checked: false,
+        const SizedBox(height: ProposalistSpacing.lg),
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: progressValue),
+          duration: const Duration(milliseconds: 520),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, _) {
+            return LinearProgressIndicator(value: value);
+          },
         ),
-        const _ChecklistItem(label: 'Formatting and polishing', checked: false),
+        const SizedBox(height: ProposalistSpacing.lg),
+        for (var index = 0; index < _steps.length; index++)
+          _ChecklistItem(
+            index: index,
+            label: _steps[index].label,
+            checked: index <= _activeStep,
+          ),
         const SizedBox(height: ProposalistSpacing.lg),
         const _InfoCallout(
           text:
@@ -801,10 +950,18 @@ class _GeneratingProposalView extends StatelessWidget {
   }
 }
 
+class _ProgressStep {
+  const _ProgressStep(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
 class _ErrorProposalView extends StatelessWidget {
-  const _ErrorProposalView({required this.message});
+  const _ErrorProposalView({required this.message, required this.onRetry});
 
   final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -844,7 +1001,8 @@ class _ErrorProposalView extends StatelessWidget {
                 children: [
                   Expanded(
                     child: FilledButton(
-                      onPressed: () {},
+                      key: const Key('retryProposalButton'),
+                      onPressed: onRetry,
                       child: const Text('Try Again'),
                     ),
                   ),
@@ -1069,23 +1227,35 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class _ChecklistItem extends StatelessWidget {
-  const _ChecklistItem({required this.label, required this.checked});
+  const _ChecklistItem({
+    required this.index,
+    required this.label,
+    required this.checked,
+  });
 
+  final int index;
   final String label;
   final bool checked;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
+      key: Key(
+        'proposalProgressStep$index${checked ? 'Completed' : 'Pending'}',
+      ),
       padding: const EdgeInsets.only(bottom: ProposalistSpacing.sm),
       child: Row(
         children: [
-          Icon(
-            checked ? Icons.check_circle : Icons.circle_outlined,
-            color: checked
-                ? ProposalistColors.primary
-                : ProposalistColors.border,
-            size: 18,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: Icon(
+              checked ? Icons.check_circle : Icons.circle_outlined,
+              key: ValueKey(checked),
+              color: checked
+                  ? ProposalistColors.primary
+                  : ProposalistColors.border,
+              size: 18,
+            ),
           ),
           const SizedBox(width: ProposalistSpacing.sm),
           Expanded(

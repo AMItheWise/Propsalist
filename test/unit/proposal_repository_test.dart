@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proposal_writer/core/env.dart';
@@ -88,6 +90,58 @@ void main() {
   );
 
   test(
+    'ProposalRepositoryImpl describes receive timeout errors clearly',
+    () async {
+      final dioError = DioException(
+        requestOptions: RequestOptions(path: '/v1/responses'),
+        type: DioExceptionType.receiveTimeout,
+      );
+      final client = FakeOpenAIClient(error: dioError);
+      final repository = ProposalRepositoryImpl(client: client, config: config);
+
+      final result = await repository.generateProposal(
+        prompt: 'Test',
+        tone: ProposalTone.direct,
+        maxTokens: 64,
+        summary: 'Summary',
+      );
+
+      result.when(
+        success: (_) => fail('Expected failure'),
+        failure: (failure) {
+          expect(failure, isA<NetworkFailure>());
+          expect(failure.message, contains('timed out'));
+        },
+      );
+    },
+  );
+
+  test('ProposalRepositoryImpl describes connection errors clearly', () async {
+    final dioError = DioException(
+      requestOptions: RequestOptions(path: '/v1/responses'),
+      type: DioExceptionType.connectionError,
+      error: const SocketException('Failed host lookup'),
+    );
+    final client = FakeOpenAIClient(error: dioError);
+    final repository = ProposalRepositoryImpl(client: client, config: config);
+
+    final result = await repository.generateProposal(
+      prompt: 'Test',
+      tone: ProposalTone.direct,
+      maxTokens: 64,
+      summary: 'Summary',
+    );
+
+    result.when(
+      success: (_) => fail('Expected failure'),
+      failure: (failure) {
+        expect(failure, isA<NetworkFailure>());
+        expect(failure.message, contains('network connection'));
+      },
+    );
+  });
+
+  test(
     'ProposalRepositoryImpl includes saved user profile context in requests',
     () async {
       final client = FakeOpenAIClient(
@@ -114,6 +168,11 @@ void main() {
         client.lastRequest?.messages.last.content,
         contains('User request: Write a proposal'),
       );
+      expect(
+        client.lastRequest?.messages.first.content,
+        contains('details already present'),
+      );
+      expect(client.lastRequest?.messages.first.content, contains('portfolio'));
     },
   );
 }

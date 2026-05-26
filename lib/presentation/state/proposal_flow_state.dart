@@ -35,6 +35,8 @@ class ProposalFlowState {
     required this.proposal,
     required this.errorMessage,
     required this.pendingRequest,
+    required this.generationPromptOverride,
+    required this.clarificationAnswers,
   });
 
   factory ProposalFlowState.initial() => const ProposalFlowState(
@@ -46,6 +48,8 @@ class ProposalFlowState {
     proposal: null,
     errorMessage: null,
     pendingRequest: null,
+    generationPromptOverride: null,
+    clarificationAnswers: null,
   );
 
   final ProposalFlowStage stage;
@@ -56,6 +60,8 @@ class ProposalFlowState {
   final String? proposal;
   final String? errorMessage;
   final ProposalRequest? pendingRequest;
+  final String? generationPromptOverride;
+  final String? clarificationAnswers;
 
   ProposalFlowState copyWith({
     ProposalFlowStage? stage,
@@ -66,6 +72,8 @@ class ProposalFlowState {
     Object? proposal = _notSet,
     Object? errorMessage = _notSet,
     Object? pendingRequest = _notSet,
+    Object? generationPromptOverride = _notSet,
+    Object? clarificationAnswers = _notSet,
   }) {
     return ProposalFlowState(
       stage: stage ?? this.stage,
@@ -81,6 +89,12 @@ class ProposalFlowState {
       pendingRequest: pendingRequest == _notSet
           ? this.pendingRequest
           : pendingRequest as ProposalRequest?,
+      generationPromptOverride: generationPromptOverride == _notSet
+          ? this.generationPromptOverride
+          : generationPromptOverride as String?,
+      clarificationAnswers: clarificationAnswers == _notSet
+          ? this.clarificationAnswers
+          : clarificationAnswers as String?,
     );
   }
 }
